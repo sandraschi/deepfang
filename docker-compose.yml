@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ── Sanitizer Shim (replaces fictional ZeroClaw) ────────────────────────
   sanitizer:
@@ -191,3 +189,5 @@ volumes:
   worker_workspace:
   prometheus_data:
   grafana_data:
+
+

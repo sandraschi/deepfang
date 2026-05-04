@@ -37,6 +37,20 @@ Require-Command "docker"  "Docker.DockerDesktop"
 Require-Command "node"    "OpenJS.NodeJS.LTS"
 Write-Host "[prereq] OK" -ForegroundColor Green
 
+# Docker engine check
+Write-Host "[prereq] Checking Docker engine..." -ForegroundColor DarkGray
+$dockerOk = $false
+try {
+    $null = docker info --format "{{.ServerVersion}}" 2>$null
+    $dockerOk = $true
+} catch {}
+if (-not $dockerOk) {
+    Write-Error "Docker Desktop is installed but the Linux engine is not running."
+    Write-Host "  Start Docker Desktop and wait for the whale icon in the tray to stop animating." -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "[prereq] Docker engine OK" -ForegroundColor Green
+
 # .env check
 if (-not (Test-Path ".env")) {
     Write-Warning ".env not found - copying from .env.example"
