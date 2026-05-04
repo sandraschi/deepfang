@@ -48,15 +48,17 @@ test:
 
 # ── Lint ─
 
-# Run ruff lint + format check
+# Run ruff (Python) + biome (dashboard) lint + format check
 check:
     uv run ruff format . --check
     uv run ruff check .
+    cd dashboard && npx @biomejs/biome check .
 
-# Auto-fix lint issues
+# Auto-fix lint issues (ruff Python + biome dashboard)
 fix:
     uv run ruff format .
     uv run ruff check --fix .
+    cd dashboard && npx @biomejs/biome check --apply .
 
 # ── Docker ─
 
