@@ -62,6 +62,14 @@ fix:
 
 # ── Docker ─
 
+# Kill Docker Desktop + backend + WSL2 VM (triple kill for stalled engine)
+docker-kill:
+    taskkill /f /im "Docker Desktop.exe" 2>nul
+    taskkill /f /im "com.docker.backend.exe" 2>nul
+    taskkill /f /im "vmmem" 2>nul
+    taskkill /f /im "vmmemWSL" 2>nul
+    Write-Host "Docker processes killed. Restart Docker Desktop manually." -ForegroundColor Yellow
+
 # Start the full stack
 up:
     docker compose up -d

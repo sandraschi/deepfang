@@ -46,7 +46,8 @@ try {
 } catch {}
 if (-not $dockerOk) {
     Write-Error "Docker Desktop is installed but the Linux engine is not running."
-    Write-Host "  Start Docker Desktop and wait for the whale icon in the tray to stop animating." -ForegroundColor Yellow
+    Write-Host "  Try: just docker-kill  (kills Docker Desktop + backend + WSL2 VM)" -ForegroundColor Yellow
+    Write-Host "  Then restart Docker Desktop and wait for the whale icon to stop animating." -ForegroundColor Yellow
     exit 1
 }
 Write-Host "[prereq] Docker engine OK" -ForegroundColor Green
