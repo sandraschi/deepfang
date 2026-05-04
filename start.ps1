@@ -13,8 +13,7 @@ function Require-Command {
         if ($WingetId) {
             Write-Host "  Installing $Cmd via winget..." -ForegroundColor Yellow
             winget install --id $WingetId -e --accept-source-agreements --accept-package-agreements
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH","User")
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
             if (-not (Get-Command $Cmd -ErrorAction SilentlyContinue)) {
                 Write-Error "$Cmd still not found after install. Restart your terminal and retry."
                 exit 1
@@ -30,18 +29,18 @@ $RepoRoot = $PSScriptRoot
 Set-Location $RepoRoot
 
 Write-Host ""
-Write-Host "=== DeepFang v0.2.0 — Goliath Execution Isolation Stack ===" -ForegroundColor Cyan
+Write-Host "=== DeepFang v0.2.0 - Goliath Execution Isolation Stack ===" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Prerequisites ─────────────────────────────────────────────────────────
+# Prerequisites
 Write-Host "[prereq] Checking dependencies..." -ForegroundColor DarkGray
 Require-Command "docker"  "Docker.DockerDesktop"
 Require-Command "node"    "OpenJS.NodeJS.LTS"
 Write-Host "[prereq] OK" -ForegroundColor Green
 
-# ── .env check ────────────────────────────────────────────────────────────
+# .env check
 if (-not (Test-Path ".env")) {
-    Write-Warning ".env not found — copying from .env.example"
+    Write-Warning ".env not found - copying from .env.example"
     Copy-Item ".env.example" ".env"
     Write-Warning "Edit .env and set DEEPSEEK_API_KEY before the adjudicator will work."
 }
@@ -51,7 +50,7 @@ if ($envContent -match "DEEPSEEK_API_KEY=sk-xxxx") {
     Write-Warning "DEEPSEEK_API_KEY is still the placeholder. Adjudication will return deny for all requests."
 }
 
-# ── Kill zombies on our ports ─────────────────────────────────────────────
+# Kill zombies on our ports
 $Ports = @(10956, 10957, 10958, 10959, 10960, 10961, 10962, 10963)
 foreach ($Port in $Ports) {
     $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
@@ -60,7 +59,7 @@ foreach ($Port in $Ports) {
     }
 }
 
-# ── Build dashboard if needed ─────────────────────────────────────────────
+# Build dashboard if needed
 $DashDist = Join-Path $RepoRoot "dashboard\dist\index.html"
 if (-not (Test-Path $DashDist)) {
     Write-Host "[dashboard] Building React dashboard..." -ForegroundColor Cyan
@@ -71,17 +70,17 @@ if (-not (Test-Path $DashDist)) {
     Write-Host "[dashboard] Build complete." -ForegroundColor Green
 }
 
-# ── Start observability stack ─────────────────────────────────────────────
+# Start observability stack
 Write-Host "[1/3] Starting observability stack (Prometheus, Loki, Grafana)..." -ForegroundColor Cyan
 docker compose up -d prometheus loki promtail grafana
 if ($LASTEXITCODE -ne 0) { Write-Error "Observability stack failed."; exit 1 }
 
-# ── Start pipeline ────────────────────────────────────────────────────────
+# Start pipeline
 Write-Host "[2/3] Building and starting pipeline (sanitizer, deepseek-bridge, worker, supervisor)..." -ForegroundColor Cyan
 docker compose up -d --build sanitizer deepseek-bridge worker supervisor
 if ($LASTEXITCODE -ne 0) { Write-Error "Pipeline failed to start."; exit 1 }
 
-# ── Wait for supervisor health ────────────────────────────────────────────
+# Wait for supervisor health
 Write-Host "[3/3] Waiting for supervisor readiness..." -ForegroundColor Cyan
 $Timeout = 60
 $Elapsed = 0
@@ -102,7 +101,7 @@ if (-not $Ready) {
     Write-Host "[3/3] Supervisor healthy." -ForegroundColor Green
 }
 
-# ── Summary ───────────────────────────────────────────────────────────────
+# Summary
 Write-Host ""
 Write-Host "DeepFang stack is running:" -ForegroundColor Green
 Write-Host "  MCP + API:       http://localhost:10956/mcp"  -ForegroundColor White
