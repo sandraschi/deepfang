@@ -62,12 +62,24 @@ fix:
 
 # ── Docker ─
 
-# Kill Docker Desktop + backend + WSL2 VM (triple kill for stalled engine)
+# Kill stalled Docker engine (gentle first, escalate to triple kill)
 docker-kill:
-    taskkill /f /im "Docker Desktop.exe" 2>nul
-    taskkill /f /im "com.docker.backend.exe" 2>nul
-    taskkill /f /im "vmmem" 2>nul
-    taskkill /f /im "vmmemWSL" 2>nul
+    Write-Host "[1/3] Terminating docker-desktop WSL distro..." -ForegroundColor Cyan
+    wsl --terminate docker-desktop 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Host "  OK - distro terminated" -ForegroundColor Green }
+    Start-Sleep 2
+    $alive = docker info --format "{{.ServerVersion}}" 2>$null
+    if ($alive) { Write-Host "  Docker engine recovered." -ForegroundColor Green; exit 0 }
+    Write-Host "[2/3] Full WSL shutdown..." -ForegroundColor Cyan
+    wsl --shutdown
+    Start-Sleep 3
+    $alive = docker info --format "{{.ServerVersion}}" 2>$null
+    if ($alive) { Write-Host "  Docker engine recovered." -ForegroundColor Green; exit 0 }
+    Write-Host "[3/3] Triple kill (Docker Desktop + backend + vmmem)..." -ForegroundColor Cyan
+    taskkill /f /im "Docker Desktop.exe" 2>$null
+    taskkill /f /im "com.docker.backend.exe" 2>$null
+    taskkill /f /im "vmmem" 2>$null
+    taskkill /f /im "vmmemWSL" 2>$null
     Write-Host "Docker processes killed. Restart Docker Desktop manually." -ForegroundColor Yellow
 
 # Start the full stack
