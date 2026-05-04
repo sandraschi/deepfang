@@ -5,7 +5,6 @@
 #>
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
 
 function Require-Command {
     param([string]$Cmd, [string]$WingetId = "")
@@ -50,13 +49,17 @@ if ($envContent -match "DEEPSEEK_API_KEY=sk-xxxx") {
     Write-Warning "DEEPSEEK_API_KEY is still the placeholder. Adjudication will return deny for all requests."
 }
 
-# Kill zombies on our ports
-$Ports = @(10956, 10957, 10958, 10959, 10960, 10961, 10962, 10963)
-foreach ($Port in $Ports) {
-    $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-    if ($conn) {
-        Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+# Kill zombies on our ports (best-effort, may fail on some Windows SKUs)
+try {
+    $Ports = @(10956, 10957, 10958, 10959, 10960, 10961, 10962, 10963)
+    foreach ($Port in $Ports) {
+        $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+        if ($conn) {
+            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+        }
     }
+} catch {
+    Write-Host "[warn] Port cleanup skipped (Get-NetTCPConnection not available)" -ForegroundColor DarkGray
 }
 
 # Build dashboard if needed
@@ -64,8 +67,8 @@ $DashDist = Join-Path $RepoRoot "dashboard\dist\index.html"
 if (-not (Test-Path $DashDist)) {
     Write-Host "[dashboard] Building React dashboard..." -ForegroundColor Cyan
     Push-Location (Join-Path $RepoRoot "dashboard")
-    npm ci --silent
-    npm run build
+    cmd /c "npm ci --silent"
+    cmd /c "npm run build"
     Pop-Location
     Write-Host "[dashboard] Build complete." -ForegroundColor Green
 }
