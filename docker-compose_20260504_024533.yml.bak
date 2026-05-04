@@ -1,0 +1,194 @@
+version: "3.8"
+
+services:
+  # ── ZeroClaw Sanitizer ──────────────────────────────────────────────────
+  zeroclaw:
+    image: ghcr.io/zeroclaw-labs/zeroclaw:v0.7.4
+    container_name: deepfang-zeroclaw
+    ports:
+      - "10932:10932"
+    volumes:
+      - ./configs/zeroclaw:/app/config
+      - zeroclaw_data:/app/data
+    environment:
+      - ZEROCLAW_MODE=gatekeeper
+      - ZEROCLAW_MCP_PORT=10932
+      - ZEROCLAW_APPROVAL_GATE=strict
+    networks:
+      - deepfang-sanitize
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10932/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── DeepSeek-V4-Pro Adjudicator Bridge ──────────────────────────────────
+  deepseek-bridge:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.supervisor
+      target: deepseek-bridge
+    container_name: deepfang-deepseek
+    ports:
+      - "10933:10933"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - PORT=10933
+    networks:
+      - deepfang-adjudicate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10933/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Moltbot Worker (Air-Gapped) ─────────────────────────────────────────
+  moltbot:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: deepfang-moltbot
+    ports:
+      - "10934:10934"
+    volumes:
+      - ./configs/moltbot:/app/config
+      - d:/dev/repos:/repos:ro
+      - moltbot_workspace:/workspace
+    environment:
+      - MOLTBOT_MODE=worker
+      - MOLTBOT_PORT=10934
+      - MOLTBOT_GIT_ROOT=/repos
+      - MOLTBOT_SANDBOX=docker
+      - MOLTBOT_NO_WAN=true
+    networks:
+      deepfang-worker:
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+    depends_on:
+      deepseek-bridge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10934/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Supervisor: MCP Server + Web Dashboard ──────────────────────────────
+  supervisor:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.supervisor
+      target: supervisor
+    container_name: deepfang-supervisor
+    ports:
+      - "10930:10930"
+      - "10931:10931"
+    volumes:
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    environment:
+      - DEEPFANG_PORT=10930
+      - DEEPFANG_DASHBOARD_PORT=10931
+      - ZEROCLAW_URL=http://zeroclaw:10932
+      - DEEPSEEK_URL=http://deepseek-bridge:10933
+      - MOLTBOT_URL=http://moltbot:10934
+      - GIT_ROOT=/repos
+      - PROMETHEUS_MULTIPROC_DIR=/tmp
+    networks:
+      - deepfang-sanitize
+      - deepfang-adjudicate
+      - deepfang-worker
+    depends_on:
+      zeroclaw:
+        condition: service_healthy
+      deepseek-bridge:
+        condition: service_healthy
+      moltbot:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Prometheus ──────────────────────────────────────────────────────────
+  prometheus:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.prometheus
+    container_name: deepfang-prometheus
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - "10935:9090"
+    networks:
+      - deepfang-internal
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+
+  # ── Loki ────────────────────────────────────────────────────────────────
+  loki:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.loki
+    container_name: deepfang-loki
+    ports:
+      - "10936:3100"
+    networks:
+      - deepfang-internal
+    command: "-config.file=/etc/loki/local-config.yaml"
+    restart: unless-stopped
+
+  # ── Promtail ────────────────────────────────────────────────────────────
+  promtail:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.promtail
+    container_name: deepfang-promtail
+    volumes:
+      - ./logs:/var/log/deepfang
+    networks:
+      - deepfang-internal
+    command: "-config.file=/etc/promtail/promtail-config.yml"
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  # ── Grafana ─────────────────────────────────────────────────────────────
+  grafana:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.grafana
+    container_name: deepfang-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "10937:3000"
+    networks:
+      - deepfang-internal
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+
+networks:
+  deepfang-sanitize:
+    internal: true
+  deepfang-adjudicate:
+    driver: bridge
+  deepfang-worker:
+    internal: true
+  deepfang-internal:
+    driver: bridge
+
+volumes:
+  zeroclaw_data:
+  moltbot_workspace:
+  prometheus_data:
+  grafana_data:

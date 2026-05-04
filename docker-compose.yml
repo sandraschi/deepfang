@@ -1,0 +1,193 @@
+version: "3.8"
+
+services:
+  # ── Sanitizer Shim (replaces fictional ZeroClaw) ────────────────────────
+  sanitizer:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.sanitizer
+    container_name: deepfang-sanitizer
+    ports:
+      - "10958:10958"
+    volumes:
+      - ./configs/sanitizer:/app/config:ro
+    environment:
+      - SANITIZER_RULES=/app/config/rules.yaml
+      - SANITIZER_LLM_URL=${SANITIZER_LLM_URL:-}
+      - SANITIZER_LLM_MODEL=${SANITIZER_LLM_MODEL:-qwen2.5:7b}
+    networks:
+      - deepfang-sanitize
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10958/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── DeepSeek-V4-Pro Adjudicator Bridge ──────────────────────────────────
+  deepseek-bridge:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.supervisor
+      target: deepseek-bridge
+    container_name: deepfang-deepseek
+    ports:
+      - "10959:10959"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - PORT=10959
+    networks:
+      - deepfang-adjudicate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10959/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Worker (replaces fictional OpenClaw/Moltbot, air-gapped) ────────────
+  worker:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.worker
+    container_name: deepfang-worker
+    ports:
+      - "10960:10960"
+    volumes:
+      - ./configs/worker:/app/config:ro
+      - d:/dev/repos:/repos:rw
+      - worker_workspace:/workspace
+    environment:
+      - WORKER_CONFIG=/app/config/worker.yaml
+      - WORKER_OLLAMA_URL=${WORKER_OLLAMA_URL:-}
+      - WORKER_OLLAMA_MODEL=${WORKER_OLLAMA_MODEL:-qwen2.5:14b}
+    networks:
+      deepfang-worker:
+    restart: unless-stopped
+    depends_on:
+      deepseek-bridge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10960/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Supervisor: MCP Server + Web Dashboard ──────────────────────────────
+  supervisor:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.supervisor
+      target: supervisor
+    container_name: deepfang-supervisor
+    ports:
+      - "10956:10956"
+      - "10957:10957"
+    volumes:
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    environment:
+      - DEEPFANG_PORT=10956
+      - DEEPFANG_DASHBOARD_PORT=10957
+      - SANITIZER_URL=http://sanitizer:10958
+      - DEEPSEEK_URL=http://deepseek-bridge:10959
+      - WORKER_URL=http://worker:10960
+      - GIT_ROOT=/repos
+      - PROMETHEUS_MULTIPROC_DIR=/tmp
+    networks:
+      - deepfang-sanitize
+      - deepfang-adjudicate
+      - deepfang-worker
+      - deepfang-internal
+    depends_on:
+      sanitizer:
+        condition: service_healthy
+      deepseek-bridge:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Prometheus ──────────────────────────────────────────────────────────
+  prometheus:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.prometheus
+    container_name: deepfang-prometheus
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - "10961:9090"
+    networks:
+      - deepfang-internal
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+
+  # ── Loki ────────────────────────────────────────────────────────────────
+  loki:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.loki
+    container_name: deepfang-loki
+    ports:
+      - "10962:3100"
+    networks:
+      - deepfang-internal
+    command: "-config.file=/etc/loki/local-config.yaml"
+    restart: unless-stopped
+
+  # ── Promtail ────────────────────────────────────────────────────────────
+  promtail:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.promtail
+    container_name: deepfang-promtail
+    volumes:
+      - ./logs:/var/log/deepfang
+    networks:
+      - deepfang-internal
+    command: "-config.file=/etc/promtail/promtail-config.yml"
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  # ── Grafana ─────────────────────────────────────────────────────────────
+  grafana:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.grafana
+    container_name: deepfang-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "10963:3000"
+    networks:
+      - deepfang-internal
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+
+networks:
+  deepfang-sanitize:
+    internal: true
+  deepfang-adjudicate:
+    driver: bridge
+  deepfang-worker:
+    internal: true       # air-gap: worker has NO WAN egress
+  deepfang-internal:
+    driver: bridge
+
+volumes:
+  worker_workspace:
+  prometheus_data:
+  grafana_data:

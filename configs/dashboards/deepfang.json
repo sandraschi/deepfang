@@ -1,0 +1,151 @@
+{
+  "description": "DeepFang execution isolation stack — pipeline metrics, verdict distribution, threat scores",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "title": "Pipeline Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "reqpm"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "title": "Sanitize (req/min)",
+      "type": "stat",
+      "targets": [{"expr": "rate(http_requests_total{handler=\"/api/sanitize\"}[1m]) * 60", "legendFormat": "sanitize", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "reqpm"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "id": 3,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "title": "Adjudicate (req/min)",
+      "type": "stat",
+      "targets": [{"expr": "rate(http_requests_total{handler=\"/api/adjudicate\"}[1m]) * 60", "legendFormat": "adjudicate", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "id": 4,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "title": "Pipeline Full (req/min)",
+      "type": "stat",
+      "targets": [{"expr": "rate(http_requests_total{handler=\"/api/pipeline\"}[1m]) * 60", "legendFormat": "pipeline", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+      "id": 5,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "title": "HTTP 5xx Errors",
+      "type": "stat",
+      "targets": [{"expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 300", "legendFormat": "5xx/5min", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 10,
+      "title": "Request Rates Over Time",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 11,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+      "title": "Pipeline Request Rates",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "rate(http_requests_total{handler=\"/api/sanitize\"}[2m])", "legendFormat": "sanitize", "refId": "A"},
+        {"expr": "rate(http_requests_total{handler=\"/api/adjudicate\"}[2m])", "legendFormat": "adjudicate", "refId": "B"},
+        {"expr": "rate(http_requests_total{handler=\"/api/pipeline\"}[2m])", "legendFormat": "pipeline (full)", "refId": "C"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 12,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+      "title": "Request Latency p95",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/api/sanitize\"}[5m]))", "legendFormat": "sanitize p95", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/api/adjudicate\"}[5m]))", "legendFormat": "adjudicate p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/api/pipeline\"}[5m]))", "legendFormat": "pipeline p95", "refId": "C"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 20,
+      "title": "Service Health",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]},
+          "mappings": [{"options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}, "type": "value"}]
+        }
+      },
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 15},
+      "id": 21,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "horizontal", "colorMode": "background"},
+      "title": "Service Health",
+      "type": "stat",
+      "targets": [
+        {"expr": "up{job=\"deepfang-supervisor\"}", "legendFormat": "supervisor", "refId": "A"},
+        {"expr": "up{job=\"deepfang-sanitizer\"}", "legendFormat": "sanitizer", "refId": "B"},
+        {"expr": "up{job=\"deepfang-deepseek\"}", "legendFormat": "deepseek-bridge", "refId": "C"},
+        {"expr": "up{job=\"deepfang-worker\"}", "legendFormat": "worker", "refId": "D"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": ["deepfang", "security", "pipeline"],
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "DeepFang Pipeline",
+  "uid": "deepfang-pipeline-v1",
+  "version": 1
+}

@@ -1,0 +1,115 @@
+# DeepFang Architecture
+
+## Overview
+
+DeepFang is a **Docker-Compose isolation stack** for trusted AI agent task execution on Goliath (local server PC). It enforces a three-stage pipeline: sanitize → adjudicate → dispatch, with network-level isolation between stages.
+
+## Data Flow
+
+```
+User / MCP Client / RoboFang
+        │
+        ▼
+┌───────────────────┐
+│   Supervisor      │  FastAPI + FastMCP 3.1 SSE
+│   Port 10930/31   │  Dashboard (React)
+└───────┬───────────┘
+        │
+        ▼
+┌───────────────────┐
+│   ZeroClaw        │  Sanitizer: threat scoring, prompt injection detection
+│   Port 10932      │  Network: deepfang-sanitize (internal only)
+│   Rust binary     │
+└───────┬───────────┘
+        │ allowed
+        ▼
+┌───────────────────┐
+│   DeepSeek Bridge │  Adjudicator: approve/deny via DeepSeek-V4-Pro API
+│   Port 10933      │  Network: deepfang-adjudicate (WAN for DeepSeek API)
+│   Python/FastAPI  │
+└───────┬───────────┘
+        │ approve only
+        ▼
+┌───────────────────┐
+│   Moltbot         │  Worker: executes approved tasks
+│   Port 10934      │  Network: deepfang-worker (internal, NO WAN)
+│   Node.js         │  Egress: local Git mirrors only (d:/dev/repos)
+└───────────────────┘
+```
+
+## Network Isolation
+
+| Network | WAN | Services | Purpose |
+|---------|-----|----------|---------|
+| `deepfang-sanitize` | No | ZeroClaw, Supervisor | Sanitizer has no internet, only talks to supervisor |
+| `deepfang-adjudicate` | Yes | DeepSeek Bridge, Supervisor | Bridge needs WAN for DeepSeek cloud API |
+| `deepfang-worker` | No | Moltbot, Supervisor | Worker air-gapped — no internet, Git mirrors only |
+| `deepfang-internal` | No | Prometheus, Loki, Promtail, Grafana | Observability data plane |
+
+The supervisor is the **only** service on all three pipeline networks. It acts as the trusted broker:
+1. Receives tasks via API/MCP
+2. Forwards to ZeroClaw on sanitize network
+3. Forwards sanitized content to DeepSeek bridge on adjudicate network
+4. Forwards approved tasks to Moltbot on worker network
+5. Publishes metrics to Prometheus and logs to Promtail
+
+## Safety Properties
+
+### Defense in Depth
+
+1. **ZeroClaw (L1)** — Rust-based agent OS with approval gates and cryptographic tool receipts. Catches injection, malicious tool use, and policy violations before content reaches the adjudicator.
+
+2. **DeepSeek-V4-Pro (L2)** — Cloud-hosted LLM as second-layer adjudication. Semantic analysis of task intent, classification as `approve`/`deny` with rationale. Pre-filter: auto-deny if ZeroClaw threat score > 0.8.
+
+3. **Network Isolation (L3)** — Docker network policies enforce that the worker cannot reach the internet. Even if Moltbot is compromised, it has no WAN egress.
+
+4. **Supervisor Audit (L4)** — All adjudication decisions are logged with timestamps, content hashes, verdicts, and rationales. Audit log exposed via MCP tool `deepfang_audit`.
+
+### Failure Modes
+
+| Failure | Behavior |
+|---------|----------|
+| ZeroClaw unreachable | Pipeline returns error at sanitize stage; nothing proceeds |
+| DeepSeek API timeout | Adjudication returns `deny` with error rationale; safe default |
+| DeepSeek returns malformed JSON | Parsed as `deny`; safe default |
+| Moltbot unreachable | Dispatch returns error; task not executed |
+| DeepSeek API key unset | All adjudications return `deny` with UNCONFIGURED error |
+
+### Trust Model
+
+- **ZeroClaw is trusted** for syntactic security (injection detection, tool allowlists, pattern matching)
+- **DeepSeek-V4-Pro is trusted** for semantic security (intent classification, context-aware threat assessment)
+- **Supervisor is trusted** as the broker (logs all traffic, enforces ordering)
+- **Moltbot is untrusted** — it runs in an air-gapped network and can only write to local Git mirrors
+- **Goliath (host) is trusted** — provides the Docker runtime, filesystem, and Git mirrors
+
+## Integration with RoboFang
+
+DeepFang is designed to run alongside robofang on Goliath. Robofang's Council of Dozens can use deepfang as an additional security layer for high-risk tool executions.
+
+Add to `robofang/configs/federation_map.json`:
+
+```json
+"deepfang": {
+    "enabled": true,
+    "mcp_backend": "http://localhost:10930",
+    "description": "Docker isolation stack — ZeroClaw + DeepSeek + Moltbot"
+}
+```
+
+Robofang's `execute_tool()` with `approval_gate=True` already has a council adjudication flow. DeepFang adds **hard network isolation** on top of robofang's software-level sandboxing (DefenseClaw, Bastio, DTU).
+
+## Port Allocation
+
+| Port | Service | Range |
+|------|---------|-------|
+| 10930-10937 | DeepFang services | 8 ports |
+| 10800-10928 | RoboFang fleet | 28+ ports |
+
+DeepFang ports are deliberately above the robofang fleet range to avoid collisions.
+
+## Future
+
+- **Phase 2**: Protocol adapter between ZeroClaw tool receipts and RoboFang DTU staging
+- **Phase 3**: DeepSeek → local adjudicator migration (when DeepSeek-V4-Pro is locally installable)
+- **Phase 4**: ZeroClaw → OpenFang tool mapping extension for automated skill bridging

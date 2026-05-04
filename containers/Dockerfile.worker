@@ -1,0 +1,42 @@
+FROM python:3.12-slim AS worker
+
+WORKDIR /app
+
+# git + build tools needed for the allowlisted commands to actually be present
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# node + npm via nodesource (LTS)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:/root/.local/bin:$PATH"
+
+RUN pip install --no-cache-dir \
+    fastapi==0.115.* \
+    uvicorn[standard]==0.30.* \
+    httpx==0.27.* \
+    pyyaml==6.0.*
+
+COPY containers/worker.py /app/server.py
+
+# Workspace and repos mount points
+RUN mkdir -p /workspace /repos
+
+ENV WORKER_CONFIG=/app/config/worker.yaml
+ENV WORKER_OLLAMA_URL=""
+ENV WORKER_OLLAMA_MODEL=qwen2.5:14b
+
+EXPOSE 10960
+
+# Non-root user — same pattern as sanitizer
+RUN adduser --disabled-password --gecos "" --uid 65532 worker
+RUN chown -R worker:worker /workspace
+USER worker
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "10960"]

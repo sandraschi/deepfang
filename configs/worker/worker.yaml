@@ -1,0 +1,35 @@
+# DeepFang Worker Config
+# Engine: deepfang worker (containers/worker.py)
+# Network: deepfang-worker (Docker internal: true — no WAN egress)
+
+mode: worker
+sandbox: docker
+no_wan: true
+
+git_root: /repos          # bind-mounted from d:/dev/repos on Goliath
+workspace: /workspace     # ephemeral working directory inside container
+
+max_runtime_seconds: 300
+max_output_mb: 50
+
+# Commands the worker is permitted to execute.
+# First token of each command line is checked against this list.
+# Anything not listed here is blocked before execution.
+allowed_commands:
+  - git
+  - python
+  - python3
+  - node
+  - npm
+  - npx
+  - uv
+  - cargo
+  - go
+  - pwsh
+  - powershell
+  - mkdir
+  - cp
+  - mv
+  - cat
+  - echo
+  - ls

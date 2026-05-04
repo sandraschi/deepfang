@@ -1,0 +1,21 @@
+# Moltbot worker config for DeepFang
+# The worker is air-gapped — no WAN egress, Git mirrors only.
+
+mode: worker
+sandbox: docker
+no_wan: true
+git_root: /repos
+
+workspace: /workspace
+max_runtime_seconds: 300
+max_output_mb: 50
+
+allowed_commands:
+  - git
+  - python
+  - node
+  - npm
+  - uv
+  - cargo
+  - go
+  - pwsh

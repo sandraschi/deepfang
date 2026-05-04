@@ -1,0 +1,61 @@
+# DeepFang Sanitizer Rules
+# Engine: deepfang sanitizer shim (containers/sanitizer.py)
+# Format: rules evaluated in order; first 'deny' match wins immediately.
+#         'allow' matches reduce threat score and are noted in response.
+
+mode: sanitizer
+
+rules:
+  # ── Hard denies (immediate block, no further evaluation) ────────────────────
+
+  - name: block_destructive_fs
+    pattern: "rm\\s+-rf|del\\s+/[fsq]|format\\s+[cdef]:|mkfs\\.|dd\\s+if="
+    action: deny
+    reason: "Destructive filesystem operation — not permitted on the worker."
+
+  - name: block_network_egress
+    pattern: "curl\\s|wget\\s|nc\\s|ncat\\s|Invoke-WebRequest|Invoke-RestMethod|fetch\\("
+    action: deny
+    reason: "Network egress from the worker is forbidden by Docker network policy."
+
+  - name: block_credential_exfil
+    pattern: "cat\\s+/etc/passwd|/etc/shadow|net\\s+user\\s+.*\\/add|env\\s*\\|\\s*curl"
+    action: deny
+    reason: "Credential access or exfiltration pattern detected."
+
+  - name: block_code_injection
+    pattern: "eval\\s*\\(|exec\\s*\\(|__import__|\\$\\(.*curl|`wget|`curl"
+    action: deny
+    reason: "Dynamic code execution / command injection pattern detected."
+
+  - name: block_privilege_escalation
+    pattern: "sudo\\s+|chmod\\s+[0-7]*7[0-7]*\\s+/|chown\\s+root"
+    action: deny
+    reason: "Privilege escalation attempt detected."
+
+  - name: block_encoded_payloads
+    pattern: "powershell\\s+-enc\\s+|powershell\\s+-e\\s+[A-Za-z0-9+/=]{30,}|echo\\s+[A-Za-z0-9+/=]{40,}\\s*\\|\\s*base64"
+    action: deny
+    reason: "Encoded payload pattern (base64 PowerShell or shell) detected."
+
+  # ── Safe allows (noted, reduce threat score) ────────────────────────────────
+
+  - name: allow_git_operations
+    pattern: "git\\s+(clone|push|pull|commit|add|status|log|diff|branch|checkout|fetch|merge|rebase|stash|tag|remote)"
+    action: allow
+    reason: "Git operations on local mirrors are the worker's primary function."
+
+  - name: allow_package_managers
+    pattern: "uv\\s+(pip|run|sync|add|remove)|npm\\s+(install|run|build|test|ci)|pip\\s+install"
+    action: allow
+    reason: "Package manager operations for local builds are permitted."
+
+  - name: allow_file_operations
+    pattern: "mkdir|New-Item|Copy-Item|Move-Item|Write-Content|Set-Content|Remove-Item\\s+-Path"
+    action: allow
+    reason: "File operations within the workspace are permitted."
+
+  - name: allow_build_tools
+    pattern: "cargo\\s+(build|test|run|check)|go\\s+(build|test|run|mod)|python\\s+-m\\s+(pytest|build|setuptools)"
+    action: allow
+    reason: "Build tool invocations are permitted for local compilation."

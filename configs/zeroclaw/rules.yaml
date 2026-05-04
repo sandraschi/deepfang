@@ -1,0 +1,26 @@
+# ZeroClaw sanitizer rules for DeepFang
+# ZeroClaw runs as a gatekeeper, evaluating all incoming content before DeepSeek adjudication.
+
+mode: gatekeeper
+approval_gate: strict
+
+rules:
+  - name: block_system_modification
+    pattern: "rm -rf|del /[fsq]|format [cdef]:|dd if="
+    action: deny
+    reason: "System-level destructive operations are not allowed on the worker."
+
+  - name: block_network_egress
+    pattern: "curl |wget |nc |ncat |Invoke-WebRequest|Invoke-RestMethod"
+    action: deny
+    reason: "Network egress from the worker is forbidden by network policy."
+
+  - name: allow_git_operations
+    pattern: "git (clone|push|pull|commit|add|status|log|diff|branch|checkout)"
+    action: allow
+    reason: "Git operations on local mirrors are the worker's primary function."
+
+  - name: allow_file_operations
+    pattern: "mkdir|cp |mv |Write-|Edit-|New-Item"
+    action: allow
+    reason: "File operations within the workspace are permitted."

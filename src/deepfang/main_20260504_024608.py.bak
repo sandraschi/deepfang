@@ -1,0 +1,245 @@
+"""DeepFang Supervisor: FastAPI bridge + FastMCP server for the Goliath isolation stack."""
+
+from __future__ import annotations
+
+import collections
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Any
+
+import httpx
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
+
+from .mcp_server import create_mcp_server
+
+logger = structlog.get_logger(__name__)
+
+
+class DeepFangSupervisor:
+    """Orchestrates the sanitize → adjudicate → dispatch pipeline."""
+
+    def __init__(self, config: dict[str, Any] | None = None):
+        self.config = config or {}
+        # Env vars use canonical v0.2 names; ZEROCLAW_URL/MOLTBOT_URL kept as fallbacks
+        self.zeroclaw_url = self.config.get("zeroclaw_url", os.getenv("SANITIZER_URL", os.getenv("ZEROCLAW_URL", "http://localhost:10958")))
+        self.deepseek_url = self.config.get("deepseek_url", os.getenv("DEEPSEEK_URL", "http://localhost:10959"))
+        self.moltbot_url = self.config.get("moltbot_url", os.getenv("WORKER_URL", os.getenv("MOLTBOT_URL", "http://localhost:10960")))
+        self.git_root = self.config.get("git_root", os.getenv("GIT_ROOT", "d:/dev/repos"))
+
+        self.client = httpx.AsyncClient(timeout=60.0)
+        self.adjudication_log: collections.deque[dict[str, Any]] = collections.deque(maxlen=500)
+        self.start_time = time.time()
+
+        self.logger = logging.getLogger("deepfang.supervisor")
+        self.logger.info(
+            "DeepFang supervisor initialized: zeroclaw=%s deepseek=%s moltbot=%s",
+            self.zeroclaw_url,
+            self.deepseek_url,
+            self.moltbot_url,
+        )
+
+    async def close(self):
+        await self.client.aclose()
+
+    async def health(self) -> dict[str, Any]:
+        checks = {}
+        for name, url in [("zeroclaw", self.zeroclaw_url), ("deepseek", self.deepseek_url), ("moltbot", self.moltbot_url)]:
+            try:
+                resp = await self.client.get(f"{url}/health", timeout=5.0)
+                checks[name] = "healthy" if resp.status_code == 200 else f"status_{resp.status_code}"
+            except Exception:
+                checks[name] = "unreachable"
+        return {
+            "status": "healthy" if all(v == "healthy" for v in checks.values()) else "degraded",
+            "uptime_seconds": round(time.time() - self.start_time, 1),
+            "services": checks,
+            "adjudication_log_count": len(self.adjudication_log),
+        }
+
+    async def sanitize(self, content: str, source: str = "unknown") -> dict[str, Any]:
+        """Send content through ZeroClaw sanitizer."""
+        try:
+            resp = await self.client.post(
+                f"{self.zeroclaw_url}/sanitize",
+                json={"content": content, "source": source},
+                timeout=30.0,
+            )
+            data = resp.json()
+            self.logger.info("Sanitization: allowed=%s threat_score=%s", data.get("allowed"), data.get("threat_score"))
+            return data
+        except Exception as e:
+            self.logger.error("Sanitization failed: %s", e)
+            return {"allowed": False, "error": str(e), "threat_score": 1.0}
+
+    async def adjudicate(self, content: str, sanitize_result: dict[str, Any]) -> dict[str, Any]:
+        """Submit sanitized content to DeepSeek-V4-Pro for adjudication."""
+        try:
+            resp = await self.client.post(
+                f"{self.deepseek_url}/adjudicate",
+                json={
+                    "content": content,
+                    "sanitize_result": sanitize_result,
+                    "context": {"pipeline": "deepfang", "stage": "adjudicate"},
+                },
+                timeout=60.0,
+            )
+            data = resp.json()
+            entry = {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "content": content[:200],
+                "verdict": data.get("verdict", "deny"),
+                "rationale": data.get("rationale", ""),
+                "sanitize_score": sanitize_result.get("threat_score"),
+            }
+            self.adjudication_log.append(entry)
+            self.logger.info("Adjudication: verdict=%s", entry["verdict"])
+            return {**data, "log_entry": entry}
+        except Exception as e:
+            self.logger.error("Adjudication failed: %s", e)
+            return {"verdict": "deny", "rationale": f"Adjudication error: {e}", "error": str(e)}
+
+    async def dispatch(self, content: str, verdict: str) -> dict[str, Any]:
+        """Send approved content to Moltbot worker for execution."""
+        if verdict != "approve":
+            return {"dispatched": False, "reason": f"Verdict is '{verdict}', not 'approve'"}
+        try:
+            resp = await self.client.post(
+                f"{self.moltbot_url}/execute",
+                json={"content": content, "git_root": self.git_root},
+                timeout=120.0,
+            )
+            data = resp.json()
+            self.logger.info("Dispatch: success=%s", data.get("success"))
+            return data
+        except Exception as e:
+            self.logger.error("Dispatch failed: %s", e)
+            return {"dispatched": False, "error": str(e)}
+
+    async def pipeline(self, content: str, source: str = "unknown") -> dict[str, Any]:
+        """Full pipeline: sanitize → adjudicate → dispatch."""
+        sanitize_result = await self.sanitize(content, source)
+        if not sanitize_result.get("allowed", False):
+            return {
+                "stage": "sanitize",
+                "passed": False,
+                "reason": sanitize_result.get("reason", "ZeroClaw blocked content"),
+                "sanitize_result": sanitize_result,
+            }
+
+        adjudication = await self.adjudicate(content, sanitize_result)
+        if adjudication.get("verdict") != "approve":
+            return {
+                "stage": "adjudicate",
+                "passed": False,
+                "reason": adjudication.get("rationale", "DeepSeek denied"),
+                "sanitize_result": sanitize_result,
+                "adjudication": adjudication,
+            }
+
+        dispatch_result = await self.dispatch(content, verdict="approve")
+        return {
+            "stage": "dispatch",
+            "passed": dispatch_result.get("success", False),
+            "sanitize_result": sanitize_result,
+            "adjudication": adjudication,
+            "dispatch_result": dispatch_result,
+        }
+
+    def get_audit_log(self, limit: int = 50) -> list[dict[str, Any]]:
+        entries = list(self.adjudication_log)
+        return entries[-limit:]
+
+
+_supervisor: DeepFangSupervisor | None = None
+
+
+def get_supervisor() -> DeepFangSupervisor:
+    global _supervisor
+    if _supervisor is None:
+        _supervisor = DeepFangSupervisor()
+    return _supervisor
+
+
+app = FastAPI(title="DeepFang Supervisor", version="0.2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
+
+DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard" / "dist"
+
+
+@app.on_event("startup")
+async def startup():
+    get_supervisor()
+    from .mcp_server import create_mcp_server, _mcp
+
+    mcp_server = create_mcp_server()
+    # FastMCP 3.2: mount via http_app() instead of deprecated sse_app()
+    mcp_asgi = mcp_server.http_app(path="/")
+    app.mount("/sse", mcp_asgi)
+    if DASHBOARD_DIR.exists() and (DASHBOARD_DIR / "index.html").exists():
+        app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
+        logging.getLogger("deepfang").info("Dashboard mounted from %s", DASHBOARD_DIR)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await get_supervisor().close()
+
+
+@app.get("/health")
+async def health():
+    return await get_supervisor().health()
+
+
+@app.get("/api/audit")
+async def audit(limit: int = 50):
+    return {"entries": get_supervisor().get_audit_log(limit)}
+
+
+@app.post("/api/pipeline")
+async def pipeline(body: dict[str, Any]):
+    content = body.get("content", "")
+    source = body.get("source", "api")
+    return await get_supervisor().pipeline(content, source)
+
+
+@app.post("/api/sanitize")
+async def sanitize(body: dict[str, Any]):
+    return await get_supervisor().sanitize(body.get("content", ""), body.get("source", "api"))
+
+
+@app.post("/api/adjudicate")
+async def adjudicate(body: dict[str, Any]):
+    content = body.get("content", "")
+    sanitize_result = body.get("sanitize_result", {})
+    return await get_supervisor().adjudicate(content, sanitize_result)
+
+
+@app.get("/api/status")
+async def status():
+    sup = get_supervisor()
+    return {
+        "service": "deepfang-supervisor",
+        "version": "0.1.0",
+        "zeroclaw_url": sup.zeroclaw_url,
+        "deepseek_url": sup.deepseek_url,
+        "moltbot_url": sup.moltbot_url,
+        "git_root": sup.git_root,
+        "health": await sup.health(),
+    }
+
+

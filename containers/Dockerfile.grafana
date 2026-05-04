@@ -1,0 +1,4 @@
+FROM grafana/grafana:latest
+COPY configs/grafana-datasources.yml /etc/grafana/provisioning/datasources/datasources.yml
+COPY configs/grafana-dashboard-provider.yml /etc/grafana/provisioning/dashboards/provider.yml
+COPY configs/dashboards/ /etc/grafana/dashboards/

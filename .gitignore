@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+dashboard/dist/
+
+# Env
+.env
+
+# Logs
+logs/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+prometheus_data/
+grafana_data/
+
+# Cache
+.pytest_cache/
+.ruff_cache/
+
+# Temp
+temp/
+*.tmp

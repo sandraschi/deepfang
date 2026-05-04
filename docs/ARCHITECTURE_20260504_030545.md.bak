@@ -1,0 +1,111 @@
+# DeepFang Architecture
+
+## Overview
+
+DeepFang is a **Docker-Compose execution isolation stack** for trusted AI agent task execution on Goliath. It enforces a three-stage pipeline — sanitize → adjudicate → dispatch — with hard Docker network isolation between stages.
+
+> **v0.2.0 note:** v0.1.0 used fictional container images. The two replaced containers (sanitizer shim, worker) are now custom builds. See [SALVAGE_PLAN.md](SALVAGE_PLAN.md).
+
+## Data Flow
+
+```
+User / MCP Client / RoboFang / openclaude-mcp / openmanus-mcp
+        │
+        ▼
+┌────────────────────┐
+│   Supervisor        │  FastAPI REST + FastMCP 3.2 SSE
+│   Ports 10956/57   │  React dashboard (10957)
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│   Sanitizer Shim    │  Custom Python/FastAPI (~200 lines)
+│   Port 10958        │  Reads configs/sanitizer/rules.yaml
+│                     │  Regex pass → threat scoring → optional LLM pass
+└────────┬────────────┘
+         │ allowed + threat_score
+         ▼
+┌────────────────────┐
+│   DeepSeek Bridge   │  Custom Python/FastAPI (complete)
+│   Port 10959        │  Proxies to DeepSeek cloud API
+│                     │  Pre-filter: auto-deny if threat_score > 0.8
+└────────┬────────────┘
+         │ approve only
+         ▼
+┌────────────────────┐
+│   Worker            │  Custom Python/FastAPI (~250 lines)
+│   Port 10960        │  Air-gapped (Docker internal network, no WAN)
+│                     │  Allowlist enforcement from configs/worker/worker.yaml
+│                     │  Writes to /repos (bind-mount: d:/dev/repos)
+└────────────────────┘
+```
+
+## Network Isolation
+
+| Network | WAN | Services | Purpose |
+|---------|-----|----------|---------|
+| `deepfang-sanitize` | No | Sanitizer, Supervisor | Sanitizer isolated from internet |
+| `deepfang-adjudicate` | Yes | DeepSeek Bridge, Supervisor | Bridge needs WAN for DeepSeek API |
+| `deepfang-worker` | **No (`internal: true`)** | Worker, Supervisor | Worker air-gapped — enforced at Docker network layer |
+| `deepfang-internal` | No | Prometheus, Loki, Promtail, Grafana | Observability plane |
+
+The supervisor is the **only** service on all three pipeline networks. It is the sole trusted broker.
+
+## Safety Properties
+
+### Defense in Depth
+
+1. **Sanitizer Shim (L1)** — Regex-based first pass. Catches injection patterns, destructive commands, and network-egress attempts before content reaches the adjudicator. Threat score 0.0-1.0. Fast path: <5ms. Config-driven via `rules.yaml`.
+
+2. **DeepSeek-V4-Pro (L2)** — Cloud LLM as second-layer semantic analysis. Classifies task intent as `approve`/`deny` with rationale. Pre-filter: auto-deny if L1 threat_score > 0.8.
+
+3. **Network Isolation (L3)** — Docker `internal: true` on the worker network. The worker literally cannot reach the internet at the kernel networking level. Not a software policy — a hard network constraint.
+
+4. **Supervisor Audit (L4)** — All adjudication decisions logged with timestamp, content hash, verdict, rationale, and threat score. Accessible via `deepfang_audit` MCP tool and `GET /api/audit`.
+
+### Failure Modes (Safe Defaults)
+
+| Failure | Behavior |
+|---------|----------|
+| Sanitizer unreachable | Pipeline returns error; nothing proceeds |
+| DeepSeek API timeout | Returns `deny`; safe default |
+| DeepSeek returns malformed JSON | Parsed as `deny`; safe default |
+| DeepSeek API key unset | All adjudications return `deny` (UNCONFIGURED) |
+| Worker unreachable | Dispatch returns error; task not executed |
+
+### Trust Model
+
+- **Sanitizer is trusted** for syntactic security (pattern matching, threat scoring)
+- **DeepSeek-V4-Pro is trusted** for semantic security (intent classification)
+- **Supervisor is trusted** as broker (logs all traffic, enforces ordering)
+- **Worker is semi-trusted** — allowlist enforced, but network isolation is the primary constraint
+- **Goliath (host) is trusted** — provides Docker runtime, filesystem, Git mirrors
+
+## Integration Points
+
+### RoboFang
+
+Register in `robofang/configs/federation_map.json`. Route high-risk tool executions (shell, file writes outside workspace) through `deepfang_pipeline` instead of direct execution. DeepFang adds hard network isolation on top of robofang's software-level sandboxing (DefenseClaw, Bastio, DTU).
+
+### openclaude-mcp
+
+Pipe generated shell commands through `deepfang_sanitize` before local execution. Optional `DEEPFANG_GUARD_URL` env var enables the guard — unset = openclaude runs as before (no breaking change).
+
+### openmanus-mcp
+
+Route multi-step plan execution steps through `deepfang_pipeline`. The air-gapped worker is ideal for Manus tasks that are pure Git repo manipulation.
+
+## Port Allocation
+
+| Port | Service |
+|------|---------|
+| 10956 | Supervisor API + MCP SSE |
+| 10957 | React dashboard |
+| 10958 | Sanitizer shim |
+| 10959 | DeepSeek bridge |
+| 10960 | Worker |
+| 10961 | Prometheus |
+| 10962 | Loki |
+| 10963 | Grafana |
+
+Ports 10930-10937 (v0.1.0 assignments) were retired due to fleet collisions with `openclaude-mcp` (10932/10933) and `songgeneration-mcp` (10930).

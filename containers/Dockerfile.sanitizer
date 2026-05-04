@@ -1,0 +1,26 @@
+FROM python:3.12-slim AS sanitizer
+
+WORKDIR /app
+
+# Runtime deps only — no build tools needed
+RUN pip install --no-cache-dir \
+    fastapi==0.115.* \
+    uvicorn[standard]==0.30.* \
+    httpx==0.27.* \
+    pyyaml==6.0.*
+
+COPY containers/sanitizer.py /app/server.py
+
+# Rules config is bind-mounted at runtime via docker-compose volume
+# SANITIZER_RULES env var points here; container falls back to built-in defaults if missing
+ENV SANITIZER_RULES=/app/config/rules.yaml
+ENV SANITIZER_LLM_URL=""
+ENV SANITIZER_LLM_MODEL=qwen2.5:7b
+
+EXPOSE 10958
+
+# Non-root user for defence-in-depth
+RUN adduser --disabled-password --gecos "" --uid 65533 sanitizer
+USER sanitizer
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "10958"]

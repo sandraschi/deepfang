@@ -1,0 +1,23 @@
+FROM python:3.12-slim AS supervisor
+
+WORKDIR /app
+COPY pyproject.toml .
+COPY src/ src/
+
+RUN pip install --no-cache-dir -e .
+
+EXPOSE 10930 10931
+
+CMD ["uvicorn", "deepfang.main:app", "--host", "0.0.0.0", "--port", "10930"]
+
+
+FROM python:3.12-slim AS deepseek-bridge
+
+WORKDIR /app
+COPY containers/deepseek_bridge.py /app/server.py
+
+RUN pip install --no-cache-dir fastapi uvicorn httpx
+
+EXPOSE 10933
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "10933"]

@@ -1,0 +1,115 @@
+# DeepFang v0.1.0
+
+**Goliath Docker-Compose Isolation Stack** — ZeroClaw sanitizer + DeepSeek-V4-Pro adjudicator + Moltbot worker, air-gapped with local Git mirror egress only.
+
+[![Status: Alpha](https://img.shields.io/badge/Status-Alpha-red.svg)](README.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+---
+
+## Architecture
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
+│  ZeroClaw    │────▶│  DeepSeek-V4-Pro │────▶│   Moltbot    │
+│  Sanitizer   │     │  Adjudicator     │     │   Worker     │
+│  (Rust OS)   │     │  (Cloud API)     │     │  (Node.js)   │
+│  Port 10932  │     │  Port 10933      │     │  Port 10934  │
+└──────┬───────┘     └────────┬─────────┘     └──────┬───────┘
+       │                      │                      │
+       └──────────────────────┼──────────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │    Supervisor      │
+                    │  MCP + Dashboard   │
+                    │  Ports 10930/10931 │
+                    └─────────┬─────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+        ┌─────▼─────┐  ┌──────▼──────┐  ┌─────▼─────┐
+        │ Prometheus│  │    Loki     │  │  Grafana  │
+        │  10935    │  │   10936     │  │  10937    │
+        └───────────┘  └─────────────┘  └───────────┘
+```
+
+### Network Isolation
+
+| Network | Access | Services |
+|---------|--------|----------|
+| `deepfang-sanitize` | Internal only | ZeroClaw, Supervisor |
+| `deepfang-adjudicate` | WAN (DeepSeek API) | DeepSeek Bridge, Supervisor |
+| `deepfang-worker` | Internal only, no WAN | Moltbot, Supervisor |
+| `deepfang-internal` | Internal only | Prometheus, Loki, Promtail, Grafana |
+
+### Key Properties
+
+- **Worker has no egress to WAN** — enforced at Docker network layer (`internal: true`)
+- **Worker can only push to local Git mirrors** — Git repos volume-mounted at `/repos`, no internet on worker network
+- **DeepSeek-V4-Pro is sole adjudicator** — all sanitized requests must pass DeepSeek before reaching Moltbot
+- **ZeroClaw sanitizes first** — approval gates and tool receipts before adjudication
+- **Supervisor observes all three networks** — MCP server for automation, web dashboard for human oversight
+
+## Dependencies
+
+- **[robofang](https://github.com/sandraschi/robofang)** — fleet orchestrator, Council of Dozens, DTU staging
+- **[zeroclaw](https://github.com/zeroclaw-labs/zeroclaw)** — agent OS, approval gates, cryptographic tool receipts
+- **[openclaw](https://github.com/openclaw/openclaw)** — multi-channel agent, Pi engine, sandbox modes
+- **[DeepSeek API](https://api.deepseek.com)** — DeepSeek-V4-Pro cloud adjudicator
+
+## Quick Start
+
+```powershell
+# 1. Clone & setup
+git clone https://github.com/sandraschi/deepfang
+cd deepfang
+copy .env.example .env        # Edit DEEPSEEK_API_KEY
+.\setup.ps1
+
+# 2. Start the stack
+.\start.ps1
+
+# 3. Open dashboard
+start http://localhost:10931
+```
+
+## Port Map
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Supervisor API + MCP | 10930 | FastAPI + FastMCP 3.1 SSE |
+| Dashboard | 10931 | React web UI for human oversight |
+| ZeroClaw | 10932 | Sanitizer agent OS (Rust) |
+| DeepSeek Bridge | 10933 | Adjudicator proxy to DeepSeek API |
+| Moltbot | 10934 | Worker agent (Node.js, air-gapped) |
+| Prometheus | 10935 | Metrics collection |
+| Loki | 10936 | Log aggregation |
+| Grafana | 10937 | Observability dashboards |
+
+## MCP Tools
+
+Connect Claude Desktop / Cursor to `http://localhost:10930/sse`:
+
+| Tool | Description |
+|------|-------------|
+| `deepfang_status` | Health and pipeline summary |
+| `deepfang_sanitize` | Run ZeroClaw sanitization on input |
+| `deepfang_adjudicate` | Submit to DeepSeek for verdict |
+| `deepfang_dispatch` | Send approved task to Moltbot worker |
+| `deepfang_pipeline` | Full pipeline: sanitize → adjudicate → dispatch |
+| `deepfang_audit` | Query adjudication log |
+| `deepfang_agentic_workflow` | Multi-step goal via sampling |
+
+## Integration with RoboFang
+
+DeepFang is deployed alongside robofang on Goliath. Robofang's `federation_map.json` registers deepfang as a connector:
+
+```json
+"deepfang": {
+    "enabled": true,
+    "mcp_backend": "http://localhost:10930",
+    "description": "Docker isolation stack — ZeroClaw + DeepSeek + Moltbot"
+}
+```
+
+Start order: `robofang` → `deepfang/docker-compose up`
