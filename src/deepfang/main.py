@@ -50,7 +50,11 @@ class DeepFangSupervisor:
 
     async def health(self) -> dict[str, Any]:
         checks = {}
-        for name, url in [("zeroclaw", self.zeroclaw_url), ("deepseek", self.deepseek_url), ("moltbot", self.moltbot_url)]:
+        for name, url in [
+            ("zeroclaw", self.zeroclaw_url),
+            ("deepseek", self.deepseek_url),
+            ("moltbot", self.moltbot_url),
+        ]:
             try:
                 resp = await self.client.get(f"{url}/health", timeout=5.0)
                 checks[name] = "healthy" if resp.status_code == 200 else f"status_{resp.status_code}"
@@ -123,6 +127,18 @@ class DeepFangSupervisor:
             self.logger.error("Dispatch failed: %s", e)
             return {"dispatched": False, "error": str(e)}
 
+    async def git_op(self, repo: str, command: str, args: list[str] | None = None) -> dict[str, Any]:
+        """Run a safe git operation on the air-gapped worker."""
+        try:
+            resp = await self.client.post(
+                f"{self.moltbot_url}/git",
+                json={"repo": repo, "command": command, "args": args or [], "source": "supervisor"},
+                timeout=120.0,
+            )
+            return resp.json()
+        except Exception as e:
+            return {"success": False, "error": f"Git operation failed: {e}", "exit_code": -1}
+
     async def pipeline(self, content: str, source: str = "unknown") -> dict[str, Any]:
         """Full pipeline: sanitize → adjudicate → dispatch."""
         sanitize_result = await self.sanitize(content, source)
@@ -186,7 +202,6 @@ DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard" / "d
 @app.on_event("startup")
 async def startup():
     get_supervisor()
-    from .mcp_server import create_mcp_server, _mcp
 
     mcp_server = create_mcp_server()
     # FastMCP 3.2: mount via http_app() instead of deprecated sse_app()
@@ -229,6 +244,30 @@ async def adjudicate(body: dict[str, Any]):
     content = body.get("content", "")
     sanitize_result = body.get("sanitize_result", {})
     return await get_supervisor().adjudicate(content, sanitize_result)
+
+
+@app.get("/api/threat")
+async def threat_check(content: str = ""):
+    """Quick threat score without running the full pipeline."""
+    if not content:
+        return {"threat_score": None, "reason": "Empty content"}
+    result = await get_supervisor().sanitize(content)
+    return {
+        "threat_score": result.get("threat_score"),
+        "allowed": result.get("allowed"),
+        "reason": result.get("reason"),
+    }
+
+
+@app.post("/api/git")
+async def git_op(body: dict[str, Any]):
+    """Run a safe git operation on the air-gapped worker."""
+    repo = body.get("repo", "")
+    command = body.get("command", "")
+    args = body.get("args")
+    if not repo or not command:
+        return {"success": False, "error": "repo and command are required"}
+    return await get_supervisor().git_op(repo, command, args)
 
 
 @app.get("/api/status")

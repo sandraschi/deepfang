@@ -2,9 +2,9 @@
 
 import os
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
@@ -35,7 +35,7 @@ async def adjudicate(body: dict):
     sanitize_result = body.get("sanitize_result", {})
 
     if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY.startswith("sk-xxx"):
-        return {"verdict": "deny", "rationale": "DeepSeek API key not configured (placeholder in .env)", "error": "UNCONFIGURED"}
+        return {"verdict": "deny", "rationale": "DeepSeek API key not configured (placeholder in .env)", "error": "UNCONFIGURED"}  # noqa: E501
 
     threat_score = sanitize_result.get("threat_score", 0)
     if threat_score and threat_score > 0.8:
@@ -80,6 +80,6 @@ async def adjudicate(body: dict):
         import json as _json
 
         result = _json.loads(raw)
-        return {"verdict": result.get("verdict", "deny"), "rationale": result.get("rationale", ""), "model": DEEPSEEK_MODEL}
+        return {"verdict": result.get("verdict", "deny"), "rationale": result.get("rationale", ""), "model": DEEPSEEK_MODEL}  # noqa: E501
     except Exception as e:
         return {"verdict": "deny", "rationale": f"Adjudication failed: {e}", "error": str(e)}

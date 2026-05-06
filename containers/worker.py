@@ -2,6 +2,7 @@
 
 Exposes:
   POST /execute  → {success, output, error, exit_code, duration_ms}
+  POST /git      → {success, output, error, exit_code, duration_ms} — safe git ops
   GET  /health   → {status, workspace, git_root, allowed_commands}
 
 Two content modes (auto-detected):
@@ -23,6 +24,7 @@ Config: WORKER_CONFIG  env var (default /app/config/worker.yaml)
 from __future__ import annotations
 
 import asyncio
+import collections
 import hashlib
 import logging
 import os
@@ -130,10 +132,10 @@ def is_command_mode(content: str) -> bool:
     if _SHEBANG.match(first_line):
         return True
     # If >50% of non-empty lines start with a known command token, it's command mode
-    lines = [l.strip() for l in content.splitlines() if l.strip() and not l.strip().startswith("#")]
+    lines = [ln.strip() for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")]
     if not lines:
         return False
-    matches = sum(1 for l in lines if _COMMAND_INDICATORS.match(l))
+    matches = sum(1 for ln in lines if _COMMAND_INDICATORS.match(ln))
     return (matches / len(lines)) >= 0.5
 
 
@@ -213,7 +215,7 @@ async def run_commands(content: str, git_root: str) -> dict[str, Any]:
 
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return {
@@ -253,7 +255,6 @@ async def run_commands(content: str, git_root: str) -> dict[str, Any]:
 
 # ── Execution log ──────────────────────────────────────────────────────────────
 
-import collections
 _exec_log: collections.deque = collections.deque(maxlen=200)
 
 
@@ -393,6 +394,117 @@ async def execute_endpoint(body: dict):
         return {"success": False, "error": "Empty content", "exit_code": -1, "duration_ms": 0}
 
     return await execute(content, git_root, source)
+
+
+@app.post("/git")
+async def git_op(body: dict):
+    """Run a safe git operation in an allowed repo directory.
+
+    Body: {repo: str, command: str, args: list[str] | None, source: str | None}
+    - repo: subdirectory under git_root (e.g. "deepfang", "mcp-central-docs")
+    - command: git subcommand (e.g. "status", "log", "diff", "push")
+    - args: additional arguments to git
+
+    Blocked commands: anything outside allowlist, or repo paths escaping git_root.
+    """
+    repo = body.get("repo", "")
+    command = body.get("command", "")
+    args = body.get("args", []) or []
+    source = body.get("source", "gitops")
+    cfg = get_config()
+    git_root = cfg.get("git_root", "/repos")
+    allowed = cfg.get("allowed_commands", [])
+
+    if "git" not in allowed:
+        return {"success": False, "error": "git is not in the allowlist", "exit_code": -1, "duration_ms": 0}
+
+    if not repo:
+        return {"success": False, "error": "Missing 'repo'", "exit_code": -1, "duration_ms": 0}
+    if not command:
+        return {"success": False, "error": "Missing 'command'", "exit_code": -1, "duration_ms": 0}
+
+    # Prevent path traversal
+    repo_path = Path(git_root) / repo
+    try:
+        repo_path = repo_path.resolve()
+    except Exception:
+        return {"success": False, "error": f"Invalid repo path: {repo}", "exit_code": -1, "duration_ms": 0}
+
+    git_root_resolved = Path(git_root).resolve()
+    if not str(repo_path).startswith(str(git_root_resolved)):
+        return {"success": False, "error": f"Repo path escapes git_root: {repo}", "exit_code": -1, "duration_ms": 0}
+
+    if not repo_path.is_dir():
+        return {"success": False, "error": f"Repo directory not found: {repo_path}", "exit_code": -1, "duration_ms": 0}
+
+    # Block dangerous git commands
+    dangerous = {"push --force", "reset --hard", "clean -fd", "gc", "filter-branch", "update-ref", "rebase --exec"}
+    full_cmd = f"git {command} {' '.join(str(a) for a in args)}"
+    if any(d in full_cmd for d in dangerous):
+        return {
+            "success": False,
+            "error": f"Dangerous git command blocked: {full_cmd}",
+            "exit_code": -1,
+            "duration_ms": 0,
+        }
+
+    # Build and execute
+    cmd_parts = ["git", command] + [str(a) for a in args]
+    content_hash = hashlib.sha256(full_cmd.encode()).hexdigest()[:16]
+    start = time.monotonic()
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_parts,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(repo_path),
+            env={
+                **os.environ,
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_ASKPASS": "echo",
+            },
+        )
+        timeout = cfg.get("max_runtime_seconds", 120)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
+        except TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return {
+                "success": False,
+                "output": "",
+                "error": f"Git operation timed out after {timeout}s",
+                "exit_code": -1,
+                "duration_ms": round((time.monotonic() - start) * 1000),
+                "content_hash": content_hash,
+            }
+
+        output = stdout.decode("utf-8", errors="replace")
+        error_output = stderr.decode("utf-8", errors="replace")
+        duration_ms = round((time.monotonic() - start) * 1000)
+        success = proc.returncode == 0
+
+        result = {
+            "success": success,
+            "output": output,
+            "error": error_output if error_output else None,
+            "exit_code": proc.returncode,
+            "duration_ms": duration_ms,
+            "content_hash": content_hash,
+        }
+        log_execution(content_hash, "git", full_cmd, result, source)
+        return result
+
+    except Exception as e:
+        return {
+            "success": False,
+            "output": "",
+            "error": f"Git subprocess error: {e}",
+            "exit_code": -1,
+            "duration_ms": round((time.monotonic() - start) * 1000),
+            "content_hash": content_hash,
+        }
 
 
 @app.get("/log")

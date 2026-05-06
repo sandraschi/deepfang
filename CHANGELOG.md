@@ -4,9 +4,32 @@ All notable changes to DeepFang are documented here.
 
 ---
 
-## [0.2.0] — 2026-05-04
+## [0.2.1] — 2026-05-04
 
-Complete salvage and rebuild of the v0.1.0 scaffold. All three phases implemented in a single session.
+Day-to-day usability additions: gitops worker mode, scriptlet executor, threat check tool, resource limits.
+
+### Added
+
+**Worker gitops mode:**
+- `POST /git` on worker — safe git operations in air-gapped environment. Path traversal protection, dangerous command blocking (push --force, reset --hard, etc.), per-repo directory enforcement under git_root.
+- `POST /api/git` on supervisor — proxied endpoint for running git ops through the pipeline.
+- `supervisor.git_op()` method on the supervisor class.
+
+**Dashboard:**
+- "Threat Check" page — instant threat score via `GET /api/threat`. Score gauge (0-100), severity badge, reason detail. No pipeline needed.
+- "Scriptlets" page — paste and run scripts through the full pipeline. Preset buttons (git status, git log, system info). Shows worker output with exit code and duration.
+
+**Infrastructure:**
+- Worker `deploy.resources.limits`: 2 CPUs, 2GB memory in docker-compose.yml.
+
+### Changed
+
+- `containers/worker.py` — Added POST /git endpoint for safe git operations.
+- `src/deepfang/main.py` — Added GET /api/threat and POST /api/git endpoints. Added git_op() method to supervisor.
+- `dashboard/src/App.tsx` — Added ThreatCheckPage and ScriptletsPage components. Updated nav with both new pages.
+- `docker-compose.yml` — Added deploy.resources.limits to worker service.
+
+---
 
 ### Added
 

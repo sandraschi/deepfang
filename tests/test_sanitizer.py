@@ -1,16 +1,16 @@
 """Tests for DeepFang Sanitizer Shim (containers/sanitizer.py)."""
 
-import pytest
-from httpx import AsyncClient, ASGITransport
-
+import os
 
 # We import the app directly — no Docker needed for unit tests
 import sys
-import os
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "containers"))
 
-from sanitizer import app, evaluate, compute_threat_score
-
+from sanitizer import app, compute_threat_score, evaluate
 
 # ── Unit tests: threat scoring ─────────────────────────────────────────────────
 

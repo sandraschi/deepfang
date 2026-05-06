@@ -64,6 +64,11 @@ services:
     networks:
       deepfang-worker:
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
     depends_on:
       deepseek-bridge:
         condition: service_healthy

@@ -1,15 +1,19 @@
 """Tests for DeepFang Worker (containers/worker.py)."""
 
-import pytest
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import AsyncMock, patch
+import os
+import sys
 
-import sys, os
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "containers"))
 
 from worker import (
-    app, execute, is_command_mode, check_allowlist,
-    extract_commands, get_config,
+    app,
+    check_allowlist,
+    execute,
+    extract_commands,
+    is_command_mode,
 )
 
 DEFAULT_ALLOWED = ["git", "python", "python3", "node", "npm", "uv", "cargo", "go", "pwsh"]
@@ -166,7 +170,7 @@ async def test_exec_log_endpoint(client):
 @pytest.mark.asyncio
 async def test_execute_git_status_runs():
     """git status against a non-repo should fail gracefully (exit 128), not crash."""
-    result = await execute("git status", git_root="/tmp", source="test")
+    result = await execute("git status", git_root=os.getcwd(), source="test")
     # Should succeed in reaching subprocess (exit code 128 from git is fine — not a crash)
     assert "exit_code" in result
     assert "content_hash" in result

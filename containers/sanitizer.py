@@ -54,11 +54,11 @@ def load_rules(path: str = RULES_PATH) -> list[dict[str, Any]]:
 def _default_rules() -> list[dict[str, Any]]:
     """Minimal hardcoded fallback if rules.yaml is missing."""
     return [
-        {"name": "block_destructive", "pattern": r"rm\s+-rf|del\s+/[fsq]|format\s+[cdef]:|dd\s+if=", "action": "deny", "reason": "Destructive system operation"},
-        {"name": "block_network_egress", "pattern": r"curl\s|wget\s|Invoke-WebRequest|Invoke-RestMethod|\bnc\b|\bncat\b", "action": "deny", "reason": "Network egress forbidden"},
-        {"name": "block_credential_exfil", "pattern": r"cat\s+/etc/passwd|/etc/shadow|\$env:.*curl|env\s*\|\s*curl", "action": "deny", "reason": "Credential exfiltration pattern"},
-        {"name": "allow_git", "pattern": r"git\s+(clone|push|pull|commit|add|status|log|diff|branch|checkout|fetch|merge|rebase|stash)", "action": "allow", "reason": "Git operations permitted"},
-        {"name": "allow_file_ops", "pattern": r"mkdir|Copy-Item|Move-Item|Write-Content|New-Item|Set-Content", "action": "allow", "reason": "File operations permitted"},
+        {"name": "block_destructive", "pattern": r"rm\s+-rf|del\s+/[fsq]|format\s+[cdef]:|dd\s+if=", "action": "deny", "reason": "Destructive system operation"},  # noqa: E501
+        {"name": "block_network_egress", "pattern": r"curl\s|wget\s|Invoke-WebRequest|Invoke-RestMethod|\bnc\b|\bncat\b", "action": "deny", "reason": "Network egress forbidden"},  # noqa: E501
+        {"name": "block_credential_exfil", "pattern": r"cat\s+/etc/passwd|/etc/shadow|\$env:.*curl|env\s*\|\s*curl", "action": "deny", "reason": "Credential exfiltration pattern"},  # noqa: E501
+        {"name": "allow_git", "pattern": r"git\s+(clone|push|pull|commit|add|status|log|diff|branch|checkout|fetch|merge|rebase|stash)", "action": "allow", "reason": "Git operations permitted"},  # noqa: E501
+        {"name": "allow_file_ops", "pattern": r"mkdir|Copy-Item|Move-Item|Write-Content|New-Item|Set-Content", "action": "allow", "reason": "File operations permitted"},  # noqa: E501
     ]
 
 

@@ -13,7 +13,7 @@ def test_supervisor_import():
 def test_supervisor_init():
     from deepfang.main import DeepFangSupervisor
 
-    sv = DeepFangSupervisor(config={"zeroclaw_url": "http://test:9000", "deepseek_url": "http://test:9001", "moltbot_url": "http://test:9002"})
+    sv = DeepFangSupervisor(config={"zeroclaw_url": "http://test:9000", "deepseek_url": "http://test:9001", "moltbot_url": "http://test:9002"})  # noqa: E501
     assert sv.zeroclaw_url == "http://test:9000"
     assert sv.deepseek_url == "http://test:9001"
     assert sv.moltbot_url == "http://test:9002"
@@ -27,7 +27,7 @@ def test_supervisor_audit_log():
 
 
 def test_mcp_server_import():
-    from deepfang.mcp_server import deepfang_status, deepfang_pipeline, deepfang_audit
+    from deepfang.mcp_server import deepfang_audit, deepfang_pipeline, deepfang_status
 
     assert callable(deepfang_status)
     assert callable(deepfang_pipeline)
