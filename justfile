@@ -98,6 +98,22 @@ logs:
 rebuild:
     docker compose up -d --build
 
+# ── DeepFang ──────────────────────────────────────────────────────────────
+
+# Show supervisor health
+supervisor:
+    curl -s http://127.0.0.1:10956/health | python -c "import sys,json; d=json.load(sys.stdin); print(f'S supervisor: {d.get(\"status\",\"?\")}')"
+
+# Check adjudication log
+adjudicate:
+    cd '{{justfile_directory()}}'; \
+    uv run python -c "import httpx,asyncio,json; print(asyncio.run(httpx.AsyncClient().get('http://127.0.0.1:10956/adjudication')).text[:2000])"
+
+# Show recent workers
+workers:
+    cd '{{justfile_directory()}}'; \
+    docker ps --format "table {{.Names}}\t{{.Status}}" 2>$null || echo "docker not available"
+
 # ── Housekeeping ─
 
 # Remove all bak files from v0.1 salvage
