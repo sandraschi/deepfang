@@ -1,5 +1,13 @@
 # DeepFang
 
+<p align="center">
+  <a href="https://github.com/casey/just"><img src="https://img.shields.io/badge/just-ready_to_go-7c5cfc?style=flat-square&logo=just&logoColor=white" alt="Just"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://biomejs.dev"><img src="https://img.shields.io/badge/Linted_with-Biome-60a5fa?style=flat-square&logo=biome&logoColor=white" alt="Biome"></a>
+  <a href="https://github.com/PrefectHQ/fastmcp"><img src="https://img.shields.io/badge/FastMCP-3.2-7c5cfc?style=flat-square" alt="FastMCP"></a>
+</p>
+
 **An execution sandbox for AI agents.** DeepFang sits between an AI agent and the real world, screening every task through a three-stage pipeline before anything runs.
 
 ```
@@ -76,18 +84,22 @@ The pipeline stops at the first failure. Each stage is independently fail-closed
 ```powershell
 git clone https://github.com/sandraschi/deepfang
 cd deepfang
+just
+```
 
+This opens an interactive dashboard showing all available commands. Run `just bootstrap` to install dependencies, then `just serve` or `just dev` to start.
+
+### Manual Setup
+
+If you don't have `just` installed:
+git clone https://github.com/sandraschi/deepfang
+cd deepfang
 # 1. Configure
 copy .env.example .env
 # Edit .env — set DEEPSEEK_API_KEY
-
 # 2. Start (installs docker/node automatically if missing)
 .\start.ps1
-```
-
 The dashboard opens at `http://localhost:10957`. See [docs/INSTALL.md](docs/INSTALL.md) for full setup instructions.
-
----
 
 ## Documentation
 
@@ -98,8 +110,22 @@ The dashboard opens at `http://localhost:10957`. See [docs/INSTALL.md](docs/INST
 | [docs/SAFETY.md](docs/SAFETY.md) | Threat model, defense layers, failure modes |
 | [docs/ATTACK_VECTORS.md](docs/ATTACK_VECTORS.md) | Specific attacks and how DeepFang mitigates them |
 | [docs/ROBOFANG_INTEGRATION.md](docs/ROBOFANG_INTEGRATION.md) | Wiring into RoboFang's security pipeline |
+| [docs/OPENCLAUDE_INTEGRATION.md](docs/OPENCLAUDE_INTEGRATION.md) | Wiring into openclaude-mcp for automatic command screening |
+| [docs/WSL2_DOCKER.md](docs/WSL2_DOCKER.md) | Docker Desktop flakiness fix — native Docker in WSL2 |
 | [docs/SALVAGE_PLAN.md](docs/SALVAGE_PLAN.md) | v0.1→v0.2 history (the fictional container story) |
 | [CHANGELOG.md](CHANGELOG.md) | Full version history |
+
+## Dashboard
+
+| Page | What it does |
+|------|-------------|
+| Pipeline | Full sanitize→adjudicate→dispatch flow |
+| Threat Check | Instant threat score for any command — no pipeline needed |
+| Scriptlets | Paste & run scripts through the pipeline, see worker output |
+| Audit | All adjudication decisions with verifiable timestamps |
+| Chat | "DeepFang Expert" — ask about the pipeline and AI security |
+| Settings | LLM model switching (DeepSeek cloud / Ollama local) |
+| Help | Attack vector reference, hard deny list, MCP tool catalogue |
 
 ---
 
@@ -142,6 +168,4 @@ DeepFang is wired into [RoboFang](https://github.com/sandraschi/robofang)'s `sec
 
 ## Status
 
-v0.2.0 — all three implementation phases complete as of 2026-05-04.
-
-Deferred: openclaude-mcp guard wrapper, openmanus-mcp plan routing.
+v0.2.1 — day-to-day features (threat check, scriptlets, gitops worker) completed 2026-05-04.

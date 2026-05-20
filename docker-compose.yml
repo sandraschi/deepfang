@@ -86,8 +86,8 @@ services:
       target: supervisor
     container_name: deepfang-supervisor
     ports:
-      - "10956:10956"
-      - "10957:10957"
+      - "10956:10930"
+      - "10957:10930"
     volumes:
       - ./logs:/app/logs
       - ./configs:/app/configs:ro

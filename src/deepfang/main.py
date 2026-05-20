@@ -275,7 +275,7 @@ async def status():
     sup = get_supervisor()
     return {
         "service": "deepfang-supervisor",
-        "version": "0.1.0",
+        "version": "0.2.1",
         "zeroclaw_url": sup.zeroclaw_url,
         "deepseek_url": sup.deepseek_url,
         "moltbot_url": sup.moltbot_url,

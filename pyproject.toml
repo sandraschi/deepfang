@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "deepfang"
 version = "0.1.0"
-description = "Docker-Compose isolation stack: ZeroClaw sanitizer + DeepSeek adjudicator + Moltbot worker on Goliath"
+description = "Docker-Compose execution isolation stack: Sanitizer + DeepSeek adjudicator + air-gapped worker on Goliath"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -48,3 +48,6 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

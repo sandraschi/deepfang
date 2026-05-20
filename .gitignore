@@ -38,3 +38,4 @@ grafana_data/
 # Temp
 temp/
 *.tmp
+_dashboard/

@@ -132,10 +132,7 @@
       "title": "Service Health",
       "type": "stat",
       "targets": [
-        {"expr": "up{job=\"deepfang-supervisor\"}", "legendFormat": "supervisor", "refId": "A"},
-        {"expr": "up{job=\"deepfang-sanitizer\"}", "legendFormat": "sanitizer", "refId": "B"},
-        {"expr": "up{job=\"deepfang-deepseek\"}", "legendFormat": "deepseek-bridge", "refId": "C"},
-        {"expr": "up{job=\"deepfang-worker\"}", "legendFormat": "worker", "refId": "D"}
+        {"expr": "up{job=\"deepfang-supervisor\"}", "legendFormat": "supervisor", "refId": "A"}
       ]
     }
   ],

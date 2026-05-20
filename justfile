@@ -2,33 +2,9 @@ name := "deepfang"
 desc := "Docker-Compose execution isolation stack"
 ver := "0.2.0"
 
-# Display the SOTA Industrial Dashboard
+# Open the interactive recipe dashboard in the browser
 default:
-    @powershell -NoLogo -Command " \
-        $lines = Get-Content '{{justfile()}}'; \
-        Write-Host ' [{{name}}] {{desc}} v{{ver}}' -ForegroundColor White -BackgroundColor Cyan; \
-        Write-Host '' ; \
-        $currentCategory = ''; \
-        foreach ($line in $lines) { \
-            if ($line -match '^# ── ([^─]+) ─') { \
-                $currentCategory = $matches[1].Trim(); \
-                Write-Host \"`n  $currentCategory\" -ForegroundColor Cyan; \
-                Write-Host '  ' + ('─' * 45) -ForegroundColor Gray; \
-            } elseif ($line -match '^# ([^─].+)') { \
-                $desc = $matches[1].Trim(); \
-                $idx = [array]::IndexOf($lines, $line); \
-                if ($idx -lt $lines.Count - 1) { \
-                    $nextLine = $lines[$idx + 1]; \
-                    if ($nextLine -match '^([a-z0-9-]+)(\*)?:') { \
-                        $recipe = $matches[1]; \
-                        $pad = ' ' * [math]::Max(2, (18 - $recipe.Length)); \
-                        Write-Host \"    $recipe\" -ForegroundColor White -NoNewline; \
-                        Write-Host \"$pad$desc\" -ForegroundColor Gray; \
-                    } \
-                } \
-            } \
-        } \
-        Write-Host ''"
+    @pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../mcp-central-docs/scripts/just-dashboard.ps1 -Path .
 
 # ── Build ─
 

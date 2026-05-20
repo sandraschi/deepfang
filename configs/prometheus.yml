@@ -8,21 +8,3 @@ scrape_configs:
       - targets: ["supervisor:10930"]
     metrics_path: /metrics
     scrape_interval: 15s
-
-  - job_name: "deepseek-bridge"
-    static_configs:
-      - targets: ["deepseek-bridge:10933"]
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  - job_name: "zeroclaw"
-    static_configs:
-      - targets: ["zeroclaw:10932"]
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  - job_name: "moltbot"
-    static_configs:
-      - targets: ["moltbot:10934"]
-    metrics_path: /metrics
-    scrape_interval: 30s
