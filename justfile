@@ -1,10 +1,10 @@
-name := "deepfang"
+﻿name := "deepfang"
 desc := "Docker-Compose execution isolation stack"
 ver := "0.2.0"
 
 # Open the interactive recipe dashboard in the browser
 default:
-    @pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../mcp-central-docs/scripts/just-dashboard.ps1 -Path .
+    @just --list
 
 # ── Build ─
 
@@ -44,12 +44,12 @@ docker-kill:
     wsl --terminate docker-desktop 2>$null
     if ($LASTEXITCODE -eq 0) { Write-Host "  OK - distro terminated" -ForegroundColor Green }
     Start-Sleep 2
-    $alive = docker info --format "{{.ServerVersion}}" 2>$null
+    $alive = docker info --format '{{{{.ServerVersion}}}}' 2>$null
     if ($alive) { Write-Host "  Docker engine recovered." -ForegroundColor Green; exit 0 }
     Write-Host "[2/3] Full WSL shutdown..." -ForegroundColor Cyan
     wsl --shutdown
     Start-Sleep 3
-    $alive = docker info --format "{{.ServerVersion}}" 2>$null
+    $alive = docker info --format '{{{{.ServerVersion}}}}' 2>$null
     if ($alive) { Write-Host "  Docker engine recovered." -ForegroundColor Green; exit 0 }
     Write-Host "[3/3] Triple kill (Docker Desktop + backend + vmmem)..." -ForegroundColor Cyan
     taskkill /f /im "Docker Desktop.exe" 2>$null
@@ -88,7 +88,7 @@ adjudicate:
 # Show recent workers
 workers:
     cd '{{justfile_directory()}}'; \
-    docker ps --format "table {{.Names}}\t{{.Status}}" 2>$null || echo "docker not available"
+    docker ps --format "table {{{{.Names}}}}\t{{{{.Status}}}}" 2>$null; if (-not $?) { Write-Host "docker not available" }
 
 # ── Housekeeping ─
 
@@ -100,3 +100,4 @@ clean-bak:
 clean:
     Remove-Item -Path README_*.bak, docker-compose_*.yml.bak, start_*.ps1.bak, .env_*.example.bak, docs\ARCHITECTURE_*.md.bak -Force
     Remove-Item -Recurse -Force src\deepfang\__pycache__, dashboard\dist, .pytest_cache, .ruff_cache -ErrorAction SilentlyContinue
+
