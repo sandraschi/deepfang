@@ -1,4 +1,4 @@
-# DeepFang setup — idempotent. Run from repo root.
+# DeepFang setup - idempotent. Run from repo root.
 $ErrorActionPreference = "Stop"
 $RepoRoot = $PSScriptRoot
 Set-Location $RepoRoot

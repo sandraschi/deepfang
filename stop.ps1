@@ -1,4 +1,4 @@
-# DeepFang stop — docker-compose down.
+# DeepFang stop - docker-compose down.
 $ErrorActionPreference = "Stop"
 $RepoRoot = $PSScriptRoot
 Set-Location $RepoRoot
