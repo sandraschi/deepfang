@@ -1,4 +1,8 @@
-﻿name := "deepfang"
+set windows-shell := ["powershell.exe", "-NoProfile", "-Command"]
+
+import 'scripts/just/fleet.just'
+
+name := "deepfang"
 desc := "Docker-Compose execution isolation stack"
 ver := "0.2.0"
 
@@ -6,7 +10,7 @@ ver := "0.2.0"
 default:
     @just --list
 
-# ── Build ─
+# --- Build ---
 
 # Sync Python dependencies
 build:
@@ -16,13 +20,13 @@ build:
 build-dashboard:
     cd dashboard && npm install && npm run build
 
-# ── Test ─
+# --- Test ---
 
 # Run test suite
 test:
     uv run pytest tests/ -v
 
-# ── Lint ─
+# --- Lint ---
 
 # Run ruff (Python) + biome (dashboard) lint + format check
 check:
@@ -36,7 +40,7 @@ fix:
     uv run ruff check --fix .
     cd dashboard && npx @biomejs/biome check --apply .
 
-# ── Docker ─
+# --- Docker ---
 
 # Kill stalled Docker engine (gentle first, escalate to triple kill)
 docker-kill:
@@ -74,7 +78,7 @@ logs:
 rebuild:
     docker compose up -d --build
 
-# ── DeepFang ──────────────────────────────────────────────────────────────
+# --- DeepFang ---
 
 # Show supervisor health
 supervisor:
@@ -90,7 +94,7 @@ workers:
     cd '{{justfile_directory()}}'; \
     docker ps --format "table {{{{.Names}}}}\t{{{{.Status}}}}" 2>$null; if (-not $?) { Write-Host "docker not available" }
 
-# ── Housekeeping ─
+# --- Housekeeping ---
 
 # Remove all bak files from v0.1 salvage
 clean-bak:
@@ -101,3 +105,8 @@ clean:
     Remove-Item -Path README_*.bak, docker-compose_*.yml.bak, start_*.ps1.bak, .env_*.example.bak, docs\ARCHITECTURE_*.md.bak -Force
     Remove-Item -Recurse -Force src\deepfang\__pycache__, dashboard\dist, .pytest_cache, .ruff_cache -ErrorAction SilentlyContinue
 
+# Bootstrap: install dev deps + pre-commit hook
+bootstrap:
+    uv sync --group dev
+    uv run pre-commit install
+    Write-Host "Pre-commit hooks installed." -ForegroundColor Green
