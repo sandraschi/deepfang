@@ -18,7 +18,7 @@ build:
 
 # Build the React dashboard
 build-dashboard:
-    cd dashboard && npm install && npm run build
+    cd dashboard; npm install; npm run build
 
 # --- Test ---
 
@@ -32,13 +32,13 @@ test:
 check:
     uv run ruff format . --check
     uv run ruff check .
-    cd dashboard && npx @biomejs/biome check .
+    cd dashboard; npx @biomejs/biome check .
 
 # Auto-fix lint issues (ruff Python + biome dashboard)
 fix:
     uv run ruff format .
     uv run ruff check --fix .
-    cd dashboard && npx @biomejs/biome check --apply .
+    cd dashboard; npx @biomejs/biome check --apply .
 
 # --- Docker ---
 
