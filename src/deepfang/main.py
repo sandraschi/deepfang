@@ -28,9 +28,13 @@ class DeepFangSupervisor:
     def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
         # Env vars use canonical v0.2 names; ZEROCLAW_URL/MOLTBOT_URL kept as fallbacks
-        self.zeroclaw_url = self.config.get("zeroclaw_url", os.getenv("SANITIZER_URL", os.getenv("ZEROCLAW_URL", "http://localhost:10958")))
+        self.zeroclaw_url = self.config.get(
+            "zeroclaw_url", os.getenv("SANITIZER_URL", os.getenv("ZEROCLAW_URL", "http://localhost:10958"))
+        )
         self.deepseek_url = self.config.get("deepseek_url", os.getenv("DEEPSEEK_URL", "http://localhost:10959"))
-        self.moltbot_url = self.config.get("moltbot_url", os.getenv("WORKER_URL", os.getenv("MOLTBOT_URL", "http://localhost:10960")))
+        self.moltbot_url = self.config.get(
+            "moltbot_url", os.getenv("WORKER_URL", os.getenv("MOLTBOT_URL", "http://localhost:10960"))
+        )
         self.git_root = self.config.get("git_root", os.getenv("GIT_ROOT", "d:/dev/repos"))
 
         self.client = httpx.AsyncClient(timeout=60.0)
@@ -282,5 +286,3 @@ async def status():
         "git_root": sup.git_root,
         "health": await sup.health(),
     }
-
-

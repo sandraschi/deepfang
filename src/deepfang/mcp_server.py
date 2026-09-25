@@ -1,4 +1,4 @@
-"""DeepFang MCP 3.1 server — tools, prompts, agentic workflow."""
+"""DeepFang MCP 3.1 server - tools, prompts, agentic workflow."""
 
 from __future__ import annotations
 
@@ -81,12 +81,10 @@ async def deepfang_dispatch(content: str) -> dict[str, Any]:
     if _supervisor is None:
         return {"success": False, "error": "Supervisor not initialized."}
     import hashlib
+
     content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
     recent = _supervisor.get_audit_log(limit=20)
-    approved = any(
-        e.get("content_hash") == content_hash and e.get("verdict") == "approve"
-        for e in recent
-    )
+    approved = any(e.get("content_hash") == content_hash and e.get("verdict") == "approve" for e in recent)
     if not approved:
         return {
             "success": False,
@@ -171,7 +169,7 @@ def deepfang_quick_start() -> str:
 5. Pipeline: deepfang_pipeline(content="...") runs the full sanitize→adjudicate→dispatch in one call.
 
 The worker has no WAN egress and can only push to local Git mirrors on Goliath.
-All adjudications are logged — use deepfang_audit() to review verdicts.
+All adjudications are logged - use deepfang_audit() to review verdicts.
 For multi-step goals, use deepfang_agentic_workflow(goal="...")."""
 
 
@@ -180,7 +178,7 @@ def deepfang_pipeline_workflow() -> str:
     return """Plan a DeepFang pipeline execution:
 
 1. Call deepfang_status() to confirm ZeroClaw, DeepSeek, and Moltbot are all healthy.
-2. Call deepfang_pipeline(content="<task description or code change>") — this runs:
+2. Call deepfang_pipeline(content="<task description or code change>") - this runs:
    a. ZeroClaw sanitization (threat scoring, injection detection)
    b. DeepSeek-V4-Pro adjudication (approve/deny with rationale)
    c. Moltbot worker dispatch (only if approved, writes to local Git mirrors)
