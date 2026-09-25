@@ -4,6 +4,19 @@ All notable changes to DeepFang are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- Sanitizer rule `block_credential_paths`: denies reads of SSH keys, cloud CLI credentials (aws, azure, gcloud, kube, docker), token files (`.netrc`, `.pgpass`, `.git-credentials`, `.npmrc`, `.pypirc`), `.env` files (except `.env.example` / `.sample` / `.template` / `.dist`), `.gnupg` and Windows credential stores. Previously `cat ~/.ssh/id_rsa` scored 0.0 and only the adjudicator stopped it.
+- Tests that load the real `configs/sanitizer/rules.yaml` (existing tests only covered the in-code fallback rules).
+- Committed previously untracked pieces: `containers/taint_tracker.py`, `containers/token_injection_proxy.py` (+ tests), MCPB package (`mcpb/`), Tauri shell (`native/`), CUA test scripts, `AGENTS.md`.
+
+### Fixed
+- Worker: `curl ... | bash`, `rm -rf ...` and similar were misclassified as natural-language tasks, skipping the command allowlist (they would have been sent to Ollama if `WORKER_OLLAMA_URL` was set). They are now classified as command mode and blocked by the allowlist.
+- Ruff findings in the taint tracker / token proxy (`StrEnum`, `ClassVar`).
+
+---
+
 ## [0.2.1] — 2026-05-04
 
 Day-to-day usability additions: gitops worker mode, scriptlet executor, threat check tool, resource limits.

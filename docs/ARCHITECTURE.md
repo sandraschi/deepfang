@@ -113,7 +113,7 @@ The MCP server is mounted at `/sse` using FastMCP 3.2's `http_app()` — it shar
 
 ### Sanitizer (`containers/sanitizer.py`)
 
-~220 lines of Python/FastAPI. Stateless — reads `configs/sanitizer/rules.yaml` on startup.
+~220 lines of Python/FastAPI. Stateless — reads `configs/sanitizer/rules.yaml` once, on the first request, and caches it. After editing rules, restart the container: `docker restart deepfang-sanitizer`.
 
 Two-pass evaluation:
 1. **Regex pass** — rules evaluated in order. First `deny` match is an immediate hard block. `allow` matches reduce the threat score.
@@ -134,7 +134,7 @@ All failures (timeout, malformed JSON, missing key) return `deny`. The bridge is
 
 ~280 lines. Runs inside a Docker container with no internet access.
 
-Content mode detection: if >50% of non-empty lines start with a known command token, content is treated as shell commands (command mode). Otherwise it's a natural language task (task mode — requires `WORKER_OLLAMA_URL`).
+Content mode detection: if >50% of non-empty lines start with a known command token, content is treated as shell commands (command mode). Otherwise it's a natural language task (task mode — requires `WORKER_OLLAMA_URL`). The command-token list deliberately includes common non-allowlisted binaries (`rm`, `curl`, `wget`, `bash`, `sh`, `sudo`, `chmod`, `chown`, `dd`, `nc`, `ssh`, `scp`, `cp`, `mv`) so hostile commands are classified as command mode and rejected by the allowlist, instead of being handed to Ollama as a "task".
 
 Allowlist enforcement: first token of each command line checked against `configs/worker/worker.yaml` before any subprocess is spawned. Non-allowlisted commands are rejected immediately.
 
