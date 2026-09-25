@@ -23,6 +23,13 @@ rules:
     action: deny
     reason: "Credential access or exfiltration pattern detected."
 
+  # SSH keys, cloud CLI creds, token files, .env (not .env.example/.sample/.template/.dist),
+  # Windows credential stores. Lookbehinds keep .venv / process.env / os.environ unmatched.
+  - name: block_credential_paths
+    pattern: "\\.ssh(?![\\w-])|\\bid_(rsa|dsa|ecdsa|ed25519)\\b|\\.aws[/\\\\](credentials|config)\\b|\\.azure[/\\\\]|gcloud[/\\\\](credentials|application_default_credentials|legacy_credentials)|\\.kube[/\\\\]config\\b|\\.docker[/\\\\]config\\.json|\\.gnupg\\b|(?<![\\w.])\\.(netrc|pgpass|git-credentials|npmrc|pypirc)\\b|(?<![\\w.])\\.env(?!\\.(example|sample|template|dist)\\b)(\\.[\\w-]+)?(?![\\w.-])|Microsoft[/\\\\](Credentials|Protect)\\b|Login Data\\b"
+    action: deny
+    reason: "Access to a credential file or secret store (SSH keys, cloud CLI creds, .env, token files) is not permitted."
+
   - name: block_code_injection
     pattern: "eval\\s*\\(|exec\\s*\\(|__import__|\\$\\(.*curl|`wget|`curl"
     action: deny

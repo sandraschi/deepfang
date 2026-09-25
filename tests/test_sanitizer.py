@@ -140,6 +140,40 @@ async def test_evaluate_cargo_build():
     assert result["threat_score"] < 0.5
 
 
+_RULES_YAML = os.path.join(os.path.dirname(__file__), "..", "configs", "sanitizer", "rules.yaml")
+
+
+@pytest.mark.parametrize("content", [
+    "cat ~/.ssh/id_rsa",
+    "cat ~/.aws/credentials",
+    "cat ~/.kube/config",
+    "cat ~/.git-credentials",
+    "cat .env",
+    "cat .env.production",
+])
+@pytest.mark.asyncio
+async def test_rules_yaml_blocks_credential_paths(content, monkeypatch):
+    import sanitizer
+    monkeypatch.setattr(sanitizer, "_rules", sanitizer.load_rules(_RULES_YAML))
+    result = await evaluate(content, "test")
+    assert result["allowed"] is False
+    assert result["matched_rule"] == "block_credential_paths"
+
+
+@pytest.mark.parametrize("content", [
+    ".venv/bin/python -m pytest",
+    "node -e 'console.log(process.env.HOME)'",
+    "cat .env.example",
+    "git clone /repos/ssh-mcp",
+])
+@pytest.mark.asyncio
+async def test_rules_yaml_credential_paths_no_false_positive(content, monkeypatch):
+    import sanitizer
+    monkeypatch.setattr(sanitizer, "_rules", sanitizer.load_rules(_RULES_YAML))
+    result = await evaluate(content, "test")
+    assert result["matched_rule"] != "block_credential_paths"
+
+
 @pytest.mark.asyncio
 async def test_evaluate_has_all_fields():
     result = await evaluate("git status", "test")
