@@ -118,8 +118,11 @@ def check_allowlist(content: str, allowed: list[str]) -> tuple[bool, str | None]
 
 # ── Command mode detection ─────────────────────────────────────────────────────
 
+# Includes common non-allowlisted binaries (curl, rm, ...) so hostile commands are
+# classified as command mode and hit the allowlist, instead of being sent to Ollama.
 _COMMAND_INDICATORS = re.compile(
-    r"^(git|python|node|npm|uv|cargo|go|pwsh|mkdir|cd|echo|cat|ls|Get-|Set-|New-|Copy-|Move-|Remove-|Write-)",
+    r"^(git|python|node|npm|uv|cargo|go|pwsh|mkdir|cd|echo|cat|ls|Get-|Set-|New-|Copy-|Move-|Remove-|Write-"
+    r"|(?:rm|curl|wget|bash|sh|sudo|chmod|chown|dd|nc|ssh|scp|cp|mv)\b)",
     re.MULTILINE | re.IGNORECASE,
 )
 
