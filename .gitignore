@@ -44,3 +44,8 @@ _dashboard/
 # on every pack. Never hand-edit, never commit.
 mcpb/src/
 
+
+# Backups and coverage output
+*.bak
+*.bak-*
+.coverage
