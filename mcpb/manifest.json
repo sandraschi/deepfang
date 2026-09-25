@@ -1,0 +1,22 @@
+{
+  "manifest_version": "0.2",
+  "name": "deepfang",
+  "version": "0.1.0",
+  "description": "Docker-Compose execution isolation stack: Sanitizer + DeepSeek adjudicator + air-gapped worker on Goliath",
+  "author": { "name": "sandraschi" },
+  "server": {
+    "type": "python",
+    "entry_point": "src/deepfang/main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run","--directory","${PWD}","python","-m","deepfang"],
+      "env": {
+        "PYTHONPATH": "${PWD}/src",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  },
+  "tools": [
+    { "name": "deepfang_status", "description": "deepfang_status" }
+  ]
+}
