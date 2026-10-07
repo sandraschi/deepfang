@@ -1,0 +1,1 @@
+{"commit": "37c0622698a55210f1ad4c68fcbaf173c94c42ea", "host": "Goliath", "report": "docs/assess-reports/2026-10-08.md", "score_after": 0, "score_after_note": "self-assessed (unverified); CRITICALs cleared (3->0) but bulk HIGH/MEDIUM open; cold context authoritative", "score_before": 0, "timestamp": "2026-10-08T00:28:23.2842154+02:00"}
