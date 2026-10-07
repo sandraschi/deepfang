@@ -49,3 +49,14 @@ mcpb/src/
 *.bak
 *.bak-*
 .coverage
+
+# Assess reports (regenerable snapshots, not source)
+reports/
+
+# MCPB distributables
+*.mcpb
+
+# Local databases
+*.sqlite3
+*.db
+*.db-journal

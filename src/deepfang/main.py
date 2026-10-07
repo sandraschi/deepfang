@@ -192,7 +192,15 @@ app = FastAPI(title="DeepFang Supervisor", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:10957",
+        "http://127.0.0.1:10957",
+        "http://goliath:10957",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|goliath|[a-z0-9-]+\.tail[0-9a-z-]*\.ts\.net)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

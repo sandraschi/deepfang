@@ -9,14 +9,20 @@
     "entry_point": "src/deepfang/main.py",
     "mcp_config": {
       "command": "uv",
-      "args": ["run","--directory","${PWD}","python","-m","deepfang"],
+      "args": ["run", "--directory", "${__dirname}", "python", "-m", "deepfang"],
       "env": {
-        "PYTHONPATH": "${PWD}/src",
+        "PYTHONPATH": "${__dirname}/src",
         "PYTHONUNBUFFERED": "1"
       }
     }
   },
   "tools": [
-    { "name": "deepfang_status", "description": "deepfang_status" }
+    { "name": "deepfang_status", "description": "Health check across all pipeline services" },
+    { "name": "deepfang_sanitize", "description": "Stage 1 only - fast regex scan, returns threat score" },
+    { "name": "deepfang_adjudicate", "description": "Stage 2 only - LLM verdict with rationale" },
+    { "name": "deepfang_dispatch", "description": "Stage 3 only - requires prior approval in audit log" },
+    { "name": "deepfang_pipeline", "description": "Full pipeline in one call - the main entry point" },
+    { "name": "deepfang_audit", "description": "Query the adjudication log" },
+    { "name": "deepfang_agentic_workflow", "description": "Multi-step goal via sampling" }
   ]
 }
