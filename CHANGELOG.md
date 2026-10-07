@@ -6,6 +6,10 @@ All notable changes to DeepFang are documented here.
 
 ## [Unreleased]
 
+### Security
+- **assfix 2026-10-08 (score 0/100, runt):** fixed all 3 CRITICALs — CORS `allow_origins=["*"]` replaced with explicit origins + Tailscale/LAN/Tauri regex (`src/deepfang/main.py`); MCPB `${PWD}` → `${__dirname}` + full 7-tool list (`mcpb/manifest.json`); added `src/deepfang/__main__.py` so `python -m deepfang` (manifest stdio entry) actually imports.
+- Tauri shell pointed at the right backend: CSP `10700` → `10956` (`native/tauri.conf.json`); backend spawn log used the literal port (`native/src/backend.rs` now uses `BACKEND_PORT`).
+
 ### Added
 - Sanitizer rule `block_credential_paths`: denies reads of SSH keys, cloud CLI credentials (aws, azure, gcloud, kube, docker), token files (`.netrc`, `.pgpass`, `.git-credentials`, `.npmrc`, `.pypirc`), `.env` files (except `.env.example` / `.sample` / `.template` / `.dist`), `.gnupg` and Windows credential stores. Previously `cat ~/.ssh/id_rsa` scored 0.0 and only the adjudicator stopped it.
 - Tests that load the real `configs/sanitizer/rules.yaml` (existing tests only covered the in-code fallback rules).
