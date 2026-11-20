@@ -329,8 +329,21 @@ def create_proxy_app() -> FastAPI:
     proxy = TokenInjectionProxy()
     app = FastAPI(title="DeepFang Token Injection Proxy", version="0.3.0")
 
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
-                        allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:10957",
+            "http://localhost:10957",
+            "http://127.0.0.1:10956",
+            "http://localhost:10956",
+            "tauri://localhost",
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.on_event("startup")
     async def startup():
@@ -368,5 +381,6 @@ def create_proxy_app() -> FastAPI:
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.getenv("PROXY_HOST", "127.0.0.1")
     port = int(os.getenv("PROXY_PORT", "10959"))
-    uvicorn.run(create_proxy_app(), host="0.0.0.0", port=port)  # noqa: S104 - container service, isolated by Docker network
+    uvicorn.run(create_proxy_app(), host=host, port=port)
