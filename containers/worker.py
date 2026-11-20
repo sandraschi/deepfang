@@ -348,7 +348,15 @@ app = FastAPI(title="DeepFang Worker", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:10957",
+        "http://localhost:10957",
+        "http://127.0.0.1:10956",
+        "http://localhost:10956",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
